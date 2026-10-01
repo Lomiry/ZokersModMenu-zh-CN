@@ -6341,7 +6341,7 @@ function Controller:key_press(key)
     -- Check if the configured key was pressed
     if key == mod.config.menu_key and not (G.CONTROLLER and G.CONTROLLER.text_input_hook) and not mod.text_input_active then
         -- Always allow during runs or in menu
-        if G.STAGE == G.STAGES.RUN or G.STATE == G.STATES.MENU then
+        if G.STAGE == G.STAGES.RUN or G.STAGE == G.STAGES.MAIN_MENU then
             -- TOGGLE our specific menu ONLY
             if is_zokers_menu_open() then
                 -- Close ONLY our menu
