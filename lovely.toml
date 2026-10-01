@@ -1,0 +1,16 @@
+[manifest]
+version = "1.0.0"
+dump_lua = true
+priority = 0
+
+[[patches]]
+[patches.pattern]
+target = "engine/controller.lua"
+pattern = "function Controller:key_press(key)"
+position = "after"
+match_indent = true
+payload = """
+if G and G.FUNCS and G.FUNCS.cs_handle_menu_key and G.FUNCS.cs_handle_menu_key(key) then
+    return
+end
+"""

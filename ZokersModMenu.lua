@@ -6263,8 +6263,7 @@ G.FUNCS.set_pause_menu = function(e)
 end
 
 -- Keyboard shortcut handling - FIXED to not interfere with other menus
-local ref_Controller_key_press = Controller.key_press
-function Controller:key_press(key)
+G.FUNCS.cs_handle_menu_key = function(key)
     -- Handle key capture mode
     if mod._capturing_key then
         -- Don't capture special keys
@@ -6296,17 +6295,17 @@ function Controller:key_press(key)
             
             print("ZokersModMenu: Menu key changed to: " .. string.upper(key))
         end
-        return
+        return true
     end
     
     -- Handle text input mode
     if mod.text_input_active then
         if key == 'return' or key == 'kpenter' then
             G.FUNCS.cs_confirm_text_input()
-            return
+            return true
         elseif key == 'escape' then
             G.FUNCS.cs_cancel_text_input()
-            return
+            return true
         elseif key == 'backspace' then
             if #mod.text_input_value > 0 then
                 mod.text_input_value = string.sub(mod.text_input_value, 1, -2)
@@ -6319,7 +6318,7 @@ function Controller:key_press(key)
                     ))
                 end
             end
-            return
+            return true
         elseif string.len(key) == 1 and tonumber(key) then
             -- Only allow numeric input
             mod.text_input_value = mod.text_input_value .. key
@@ -6331,12 +6330,11 @@ function Controller:key_press(key)
                     mod.text_input_type
                 ))
             end
-            return
+            return true
         end
     end
     
-    -- Call original function first
-    local ret = ref_Controller_key_press(self, key)
+    -- Unhandled keys continue through the original controller and other mods.
     
     -- Check if the configured key was pressed
     if key == mod.config.menu_key and not (G.CONTROLLER and G.CONTROLLER.text_input_hook) and not mod.text_input_active then
@@ -6352,8 +6350,9 @@ function Controller:key_press(key)
                 G.FUNCS.cs_open_main_menu()
                 print("ZokersModMenu: Menu opened")
             end
+            return true
         end
     end
     
-    return ret
+    return false
 end
