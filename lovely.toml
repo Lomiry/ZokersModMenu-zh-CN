@@ -5,8 +5,8 @@ priority = 0
 
 [[patches]]
 [patches.pattern]
-target = "engine/controller.lua"
-pattern = "function Controller:key_press(key)"
+target = "main.lua"
+pattern = "function love.keypressed(key)"
 position = "after"
 match_indent = true
 payload = """
