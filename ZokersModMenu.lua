@@ -6263,6 +6263,31 @@ G.FUNCS.set_pause_menu = function(e)
 end
 
 -- Keyboard shortcut handling - FIXED to not interfere with other menus
+-- Windows IME: request text input only while a text field is focused.
+-- SDL's text-input switch belongs to this game window, not the user's other apps.
+local cs_ime_previous = nil
+G.FUNCS.cs_sync_menu_ime = function()
+    if not (love and love.system and love.system.getOS() == "Windows" and love.keyboard
+        and love.keyboard.hasTextInput and love.keyboard.setTextInput) then return end
+    local focused = not love.window or not love.window.hasFocus or love.window.hasFocus()
+    if not focused then
+        if cs_ime_previous ~= nil then
+            if love.keyboard.hasTextInput() ~= cs_ime_previous then
+                love.keyboard.setTextInput(cs_ime_previous)
+            end
+            cs_ime_previous = nil
+        end
+        return
+    end
+    if cs_ime_previous == nil then cs_ime_previous = love.keyboard.hasTextInput() end
+    local wants_text = not not (G.CONTROLLER and G.CONTROLLER.text_input_hook
+        or G.jokerdisplay_colour_picker and G.jokerdisplay_colour_picker.hex_focus)
+    if mod._capturing_key or mod.text_input_active then wants_text = false end
+    if love.keyboard.hasTextInput() ~= wants_text then
+        love.keyboard.setTextInput(wants_text)
+    end
+end
+
 G.FUNCS.cs_handle_menu_key = function(key)
     -- Handle key capture mode
     if mod._capturing_key then

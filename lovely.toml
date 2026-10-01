@@ -14,3 +14,13 @@ if G and G.FUNCS and G.FUNCS.cs_handle_menu_key and G.FUNCS.cs_handle_menu_key(k
     return
 end
 """
+
+[[patches]]
+[patches.pattern]
+target = "main.lua"
+pattern = "function love.update( dt )"
+position = "after"
+match_indent = true
+payload = """
+if G and G.FUNCS and G.FUNCS.cs_sync_menu_ime then G.FUNCS.cs_sync_menu_ime() end
+"""
