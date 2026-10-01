@@ -2,7 +2,7 @@
 --- MOD_NAME: ZokersModMenu
 --- MOD_ID: ZokersModMenu
 --- MOD_AUTHOR: [Zoker]
---- MOD_DESCRIPTION: Complete game customization: Build custom decks with enhancements/seals/editions, set starting items (jokers/vouchers/tags), adjust all stats (money/hands/discards/slots), modify ante scaling, give any item during runs, unlock all content.
+--- MOD_DESCRIPTION: 中文作弊菜单：编辑牌组、设置初始物品和数值、调整底注难度、对局中赠送物品、解锁全部内容。
 --- BADGE_COLOUR: 708b91
 --- PREFIX: cs
 --- PRIORITY: 0
@@ -11,6 +11,29 @@
 
 ----------------------------------------------
 ------------MOD CODE -------------------------
+
+-- Local Chinese menu: resolve names through the active game localization.
+local function cs_localized_name(key, center, set)
+    if type(localize) ~= "function" or not center then return nil end
+    local ok, result = pcall(localize, {type = "name_text", key = key, set = set or center.set})
+    if ok and type(result) == "string" and result ~= "" and result ~= key and result ~= "ERROR" then
+        return result
+    end
+end
+
+-- Count and truncate complete UTF-8 characters, never partial Chinese bytes.
+local function cs_text_length(value)
+    local count = 0
+    for _ in value:gmatch("[%z\1-\127\194-\244][\128-\191]*") do count = count + 1 end
+    return count
+end
+local function cs_text_sub(value, first, last)
+    local characters = {}
+    for character in value:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+        characters[#characters + 1] = character
+    end
+    return table.concat(characters, "", first, math.min(last, #characters))
+end
 
 -- Get the mod instance with fallback for older Steamodded versions
 local mod = SMODS.current_mod or SMODS.Mods and SMODS.Mods.ZokersModMenu or {}
@@ -44,19 +67,19 @@ if SMODS and SMODS.current_mod then
             config = {align = "cm", padding = 0.1, colour = G.C.CLEAR},
             nodes = {
                 {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
-                    {n = G.UIT.T, config = {text = "Zoker's Mod Menu", scale = 0.8, colour = G.C.WHITE}}
+                    {n = G.UIT.T, config = {text = "Zoker 作弊菜单", scale = 0.8, colour = G.C.WHITE}}
                 }},
                 {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
-                    {n = G.UIT.T, config = {text = "Press 'C' in-game or click below to open", scale = 0.4, colour = G.C.WHITE}}
+                    {n = G.UIT.T, config = {text = "游戏中按 C 或点击下方打开", scale = 0.4, colour = G.C.WHITE}}
                 }},
                 {n = G.UIT.R, config = {align = "cm", padding = 0.2}, nodes = {
                     {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_open_main_menu_from_config", hover = true, minw = 3, minh = 1, colour = G.C.BLUE, r = 0.1}, 
-                     nodes = {{n = G.UIT.T, config = {text = "Open Mod Menu", scale = 0.5, colour = G.C.WHITE}}}}
+                     nodes = {{n = G.UIT.T, config = {text = "打开作弊菜单", scale = 0.5, colour = G.C.WHITE}}}}
                 }},
 				-- Add menu key remapping
                 {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
                     {n = G.UIT.C, config = {align = "cl", padding = 0.05}, nodes = {
-                        {n = G.UIT.T, config = {text = "Menu Key: ", scale = 0.5, colour = G.C.WHITE}},
+                        {n = G.UIT.T, config = {text = "菜单快捷键：", scale = 0.5, colour = G.C.WHITE}},
                         {n = G.UIT.C, config = {align = "cm", padding = 0.05, button = "cs_change_menu_key", hover = true, minw = 1.2, minh = 0.7, 
                             colour = {0.4, 0.6, 0.8, 1}, r = 0.05, outline_colour = G.C.WHITE, outline = 1}, 
                          nodes = {{n = G.UIT.T, config = {text = string.upper(mod.config.menu_key), scale = 0.5, colour = G.C.WHITE}}}}
@@ -69,7 +92,7 @@ if SMODS and SMODS.current_mod then
                         {n = G.UIT.C, config = {align = "cm", padding = 0.05, button = "cs_toggle_mod_disabled_config", hover = true, minw = 0.5, minh = 0.5, 
     colour = mod.config.mod_disabled and {0.5, 0.5, 0.5, 1} or G.C.WHITE, r = 0.05, outline_colour = G.C.BLACK, outline = 1}, 
  nodes = {{n = G.UIT.T, config = {text = mod.config.mod_disabled and "✗" or "✓", scale = 0.4, colour = mod.config.mod_disabled and G.C.WHITE or G.C.BLACK}}}},
-{n = G.UIT.T, config = {text = mod.config.mod_disabled and " Disabled" or " Enabled", scale = 0.5, colour = G.C.WHITE}}
+{n = G.UIT.T, config = {text = mod.config.mod_disabled and " 已禁用" or " 已启用", scale = 0.5, colour = G.C.WHITE}}
                     }}
                 }}
             }
@@ -127,7 +150,7 @@ mod.config.custom_deck = mod.config.custom_deck or {}
 mod.config.starting_jokers = mod.config.starting_jokers or {}
 mod.config.starting_vouchers = mod.config.starting_vouchers or {}
 mod.config.starting_tags = mod.config.starting_tags or {}
-mod.config.current_deck_name = mod.config.current_deck_name or "Custom Deck"
+mod.config.current_deck_name = mod.config.current_deck_name or "自定义牌组"
 mod.config.use_custom_stats = mod.config.use_custom_stats or false
 mod.config.starting_joker_edition = mod.config.starting_joker_edition or 'base'
 mod.config.give_joker_edition = mod.config.give_joker_edition or 'base'
@@ -205,14 +228,14 @@ local function create_text_input_dialog(title, current_value, stat_type)
             
             -- Instructions
             {n = G.UIT.R, config = {align = "cm", padding = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Type a number and press Enter", scale = 0.4, colour = {0.7, 0.7, 0.7, 1}}}}},
+             nodes = {{n = G.UIT.T, config = {text = "输入数字后按回车确认", scale = 0.4, colour = {0.7, 0.7, 0.7, 1}}}}},
             
             -- Buttons
             {n = G.UIT.R, config = {align = "cm", padding = 0.2}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_confirm_text_input", hover = true, minw = 2, minh = 0.8, colour = G.C.GREEN, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Confirm", scale = 0.5, colour = G.C.WHITE}}}},
+                 nodes = {{n = G.UIT.T, config = {text = "确认", scale = 0.5, colour = G.C.WHITE}}}},
                 {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_cancel_text_input", hover = true, minw = 2, minh = 0.8, colour = G.C.RED, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Cancel", scale = 0.5, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "取消", scale = 0.5, colour = G.C.WHITE}}}}
             }}
         }
     }
@@ -732,40 +755,40 @@ end
 
 -- Enhancement, seal and edition options
 local enhancement_options = {
-    {key = 'base', name = 'Base'},
-    {key = 'm_bonus', name = 'Bonus'},
-    {key = 'm_mult', name = 'Mult'},
-    {key = 'm_wild', name = 'Wild'},
-    {key = 'm_glass', name = 'Glass'},
-    {key = 'm_steel', name = 'Steel'},
-    {key = 'm_stone', name = 'Stone'},
-    {key = 'm_gold', name = 'Gold'},
-    {key = 'm_lucky', name = 'Lucky'}
+    {key = 'base', name = '普通'},
+    {key = 'm_bonus', name = '奖励牌'},
+    {key = 'm_mult', name = '倍率牌'},
+    {key = 'm_wild', name = '万能牌'},
+    {key = 'm_glass', name = '玻璃牌'},
+    {key = 'm_steel', name = '钢铁牌'},
+    {key = 'm_stone', name = '石头牌'},
+    {key = 'm_gold', name = '黄金牌'},
+    {key = 'm_lucky', name = '幸运牌'}
 }
 
 local seal_options = {
-    {key = 'none', name = 'No Seal'},
-    {key = 'Gold', name = 'Gold Seal'},
-    {key = 'Red', name = 'Red Seal'},
-    {key = 'Blue', name = 'Blue Seal'},
-    {key = 'Purple', name = 'Purple Seal'}
+    {key = 'none', name = '无蜡封'},
+    {key = 'Gold', name = '金色蜡封'},
+    {key = 'Red', name = '红色蜡封'},
+    {key = 'Blue', name = '蓝色蜡封'},
+    {key = 'Purple', name = '紫色蜡封'}
 }
 
 -- Edition options for jokers (includes negative)
 local joker_edition_options = {
-    {key = 'base', name = 'Base'},
-    {key = 'foil', name = 'Foil'},
-    {key = 'holo', name = 'Holographic'},
-    {key = 'polychrome', name = 'Polychrome'},
-    {key = 'negative', name = 'Negative'}
+    {key = 'base', name = '普通'},
+    {key = 'foil', name = '闪箔'},
+    {key = 'holo', name = '镭射'},
+    {key = 'polychrome', name = '多彩'},
+    {key = 'negative', name = '负片'}
 }
 
 -- Edition options for cards (no negative)
 local card_edition_options = {
-    {key = 'base', name = 'Base'},
-    {key = 'foil', name = 'Foil'},
-    {key = 'holo', name = 'Holographic'},
-    {key = 'polychrome', name = 'Polychrome'}
+    {key = 'base', name = '普通'},
+    {key = 'foil', name = '闪箔'},
+    {key = 'holo', name = '镭射'},
+    {key = 'polychrome', name = '多彩'}
 }
 
 -- Default to card editions for compatibility
@@ -1629,9 +1652,9 @@ if original_deck_view then
         if not success then
             print("ZokersModMenu: Deck view error caught, showing simple view")
             -- Return a simple deck display if the complex one fails
-            local deck_text = "Custom Deck"
+            local deck_text = "自定义牌组"
             if G.playing_cards then
-                deck_text = deck_text .. ": " .. #G.playing_cards .. " cards"
+                deck_text = deck_text .. ": " .. #G.playing_cards .. " 张牌"
             end
             
             return {
@@ -1642,7 +1665,7 @@ if original_deck_view then
                         {n = G.UIT.T, config = {text = deck_text, scale = 0.6, colour = G.C.WHITE}}
                     }},
                     {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
-                        {n = G.UIT.T, config = {text = "Click cards to see details", scale = 0.4, colour = G.C.UI.TEXT_LIGHT}}
+                        {n = G.UIT.T, config = {text = "点击卡牌查看详情", scale = 0.4, colour = G.C.UI.TEXT_LIGHT}}
                     }}
                 }
             }
@@ -1669,7 +1692,7 @@ if original_create_tabs then
                                 config = {align = "cm", colour = G.C.CLEAR},
                                 nodes = {{
                                     n = G.UIT.T,
-                                    config = {text = "Custom Deck View", scale = 0.5, colour = G.C.WHITE}
+                                    config = {text = "查看自定义牌组", scale = 0.5, colour = G.C.WHITE}
                                 }}
                             }
                         end
@@ -1860,7 +1883,7 @@ local function create_settings_menu()
     local menu_nodes = {
         -- Title with black background
         {n = G.UIT.R, config = {align = "cm", padding = 0.2, colour = {0, 0, 0, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "ZOKERS MOD MENU", scale = 1, colour = {1, 1, 1, 1}}}}},
+         nodes = {{n = G.UIT.T, config = {text = "Zoker 作弊菜单", scale = 1, colour = {1, 1, 1, 1}}}}},
         
         -- Spacing
         {n = G.UIT.R, config = {align = "cm", padding = 0.15}, nodes = {}},
@@ -1868,17 +1891,17 @@ local function create_settings_menu()
         -- Main menu buttons - all in single column with grey-out when disabled
         {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
             {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = mod.config.use_custom_stats and "cs_open_money_menu" or nil, hover = mod.config.use_custom_stats, minw = 6.2, minh = 1, colour = mod.config.use_custom_stats and {0.2, 0.6, 0.8, 1} or {0.4, 0.4, 0.4, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Starting Stats", scale = 0.5, colour = G.C.WHITE}}}}
+             nodes = {{n = G.UIT.T, config = {text = "初始数值", scale = 0.5, colour = G.C.WHITE}}}}
         }},
         
         {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
             {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = mod.config.use_starting_items and "cs_open_starting_items_menu" or nil, hover = mod.config.use_starting_items, minw = 6.2, minh = 1, colour = mod.config.use_starting_items and {0.8, 0.2, 0.8, 1} or {0.4, 0.4, 0.4, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Starting Items", scale = 0.5, colour = G.C.WHITE}}}}
+             nodes = {{n = G.UIT.T, config = {text = "初始物品", scale = 0.5, colour = G.C.WHITE}}}}
         }},
         
         {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
             {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = mod.config.use_custom_deck and "cs_open_deck_builder" or nil, hover = mod.config.use_custom_deck, minw = 6.2, minh = 1, colour = mod.config.use_custom_deck and {0.6, 0.8, 0.2, 1} or {0.4, 0.4, 0.4, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Build Deck", scale = 0.5, colour = G.C.WHITE}}}}
+             nodes = {{n = G.UIT.T, config = {text = "编辑牌组", scale = 0.5, colour = G.C.WHITE}}}}
         }}
     }
     
@@ -1891,7 +1914,7 @@ local function create_settings_menu()
     
     table.insert(menu_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
         {n = G.UIT.C, config = give_button_config, 
-         nodes = {{n = G.UIT.T, config = {text = "Give", scale = 0.5, colour = G.C.WHITE}}}}
+         nodes = {{n = G.UIT.T, config = {text = "赠送物品", scale = 0.5, colour = G.C.WHITE}}}}
     }})
     
     -- Spacing before toggles
@@ -1902,51 +1925,51 @@ local function create_settings_menu()
     
     -- Enable/Disable options with YES/NO format - all aligned properly
     table.insert(menu_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.05}, nodes = {
-        {n = G.UIT.T, config = {text = "Starting Stats: ", scale = 0.5, colour = {1, 1, 1, 1}}},
-        in_run and {n = G.UIT.T, config = {text = mod.config.use_custom_stats and "YES" or "NO", scale = 0.5, colour = mod.config.use_custom_stats and {0.4, 1, 0.4, 1} or {1, 0.4, 0.4, 1}}} or
+        {n = G.UIT.T, config = {text = "初始数值：", scale = 0.5, colour = {1, 1, 1, 1}}},
+        in_run and {n = G.UIT.T, config = {text = mod.config.use_custom_stats and "开" or "关", scale = 0.5, colour = mod.config.use_custom_stats and {0.4, 1, 0.4, 1} or {1, 0.4, 0.4, 1}}} or
         {n = G.UIT.C, config = {align = "cm", padding = 0.05, button = "cs_toggle_custom_stats", hover = true, minw = 0.8, minh = 0.5, colour = mod.config.use_custom_stats and {0.4, 0.8, 0.4, 1} or {0.8, 0.4, 0.4, 1}, r = 0.05}, 
-         nodes = {{n = G.UIT.T, config = {text = mod.config.use_custom_stats and "YES" or "NO", scale = 0.4, colour = G.C.WHITE}}}}
+         nodes = {{n = G.UIT.T, config = {text = mod.config.use_custom_stats and "开" or "关", scale = 0.4, colour = G.C.WHITE}}}}
     }})
     
     table.insert(menu_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.05}, nodes = {
-        {n = G.UIT.T, config = {text = "Starting Items: ", scale = 0.5, colour = {1, 1, 1, 1}}},
-        in_run and {n = G.UIT.T, config = {text = mod.config.use_starting_items and "YES" or "NO", scale = 0.5, colour = mod.config.use_starting_items and {0.4, 1, 0.4, 1} or {1, 0.4, 0.4, 1}}} or
+        {n = G.UIT.T, config = {text = "初始物品：", scale = 0.5, colour = {1, 1, 1, 1}}},
+        in_run and {n = G.UIT.T, config = {text = mod.config.use_starting_items and "开" or "关", scale = 0.5, colour = mod.config.use_starting_items and {0.4, 1, 0.4, 1} or {1, 0.4, 0.4, 1}}} or
         {n = G.UIT.C, config = {align = "cm", padding = 0.05, button = "cs_toggle_starting_items", hover = true, minw = 0.8, minh = 0.5, colour = mod.config.use_starting_items and {0.4, 0.8, 0.4, 1} or {0.8, 0.4, 0.4, 1}, r = 0.05}, 
-         nodes = {{n = G.UIT.T, config = {text = mod.config.use_starting_items and "YES" or "NO", scale = 0.4, colour = G.C.WHITE}}}}
+         nodes = {{n = G.UIT.T, config = {text = mod.config.use_starting_items and "开" or "关", scale = 0.4, colour = G.C.WHITE}}}}
     }})
     
     table.insert(menu_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.05}, nodes = {
-        {n = G.UIT.T, config = {text = "Custom Deck: ", scale = 0.5, colour = {1, 1, 1, 1}}},
-        in_run and {n = G.UIT.T, config = {text = mod.config.use_custom_deck and "YES" or "NO", scale = 0.5, colour = mod.config.use_custom_deck and {0.4, 1, 0.4, 1} or {1, 0.4, 0.4, 1}}} or
+        {n = G.UIT.T, config = {text = "自定义牌组：", scale = 0.5, colour = {1, 1, 1, 1}}},
+        in_run and {n = G.UIT.T, config = {text = mod.config.use_custom_deck and "开" or "关", scale = 0.5, colour = mod.config.use_custom_deck and {0.4, 1, 0.4, 1} or {1, 0.4, 0.4, 1}}} or
         {n = G.UIT.C, config = {align = "cm", padding = 0.05, button = "cs_toggle_custom_deck", hover = true, minw = 0.8, minh = 0.5, colour = mod.config.use_custom_deck and {0.4, 0.8, 0.4, 1} or {0.8, 0.4, 0.4, 1}, r = 0.05}, 
-         nodes = {{n = G.UIT.T, config = {text = mod.config.use_custom_deck and "YES" or "NO", scale = 0.4, colour = G.C.WHITE}}}}
+         nodes = {{n = G.UIT.T, config = {text = mod.config.use_custom_deck and "开" or "关", scale = 0.4, colour = G.C.WHITE}}}}
     }})
     
     -- Give Items toggle - disable during runs
     table.insert(menu_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.05}, nodes = {
-        {n = G.UIT.T, config = {text = "Give Items: ", scale = 0.5, colour = {1, 1, 1, 1}}},
-        in_run and {n = G.UIT.T, config = {text = mod.config.allow_give_during_runs and "YES" or "NO", scale = 0.5, colour = mod.config.allow_give_during_runs and {0.4, 1, 0.4, 1} or {1, 0.4, 0.4, 1}}} or
+        {n = G.UIT.T, config = {text = "对局赠送：", scale = 0.5, colour = {1, 1, 1, 1}}},
+        in_run and {n = G.UIT.T, config = {text = mod.config.allow_give_during_runs and "开" or "关", scale = 0.5, colour = mod.config.allow_give_during_runs and {0.4, 1, 0.4, 1} or {1, 0.4, 0.4, 1}}} or
         {n = G.UIT.C, config = {align = "cm", padding = 0.05, button = "cs_toggle_give_during_runs", hover = true, minw = 0.8, minh = 0.5, colour = mod.config.allow_give_during_runs and {0.4, 0.8, 0.4, 1} or {0.8, 0.4, 0.4, 1}, r = 0.05}, 
-         nodes = {{n = G.UIT.T, config = {text = mod.config.allow_give_during_runs and "YES" or "NO", scale = 0.4, colour = G.C.WHITE}}}}
+         nodes = {{n = G.UIT.T, config = {text = mod.config.allow_give_during_runs and "开" or "关", scale = 0.4, colour = G.C.WHITE}}}}
     }})
     
     table.insert(menu_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.05}, nodes = {
-        {n = G.UIT.T, config = {text = "Free Rerolls: ", scale = 0.5, colour = {1, 1, 1, 1}}},
-        in_run and {n = G.UIT.T, config = {text = mod.config.free_rerolls and "YES" or "NO", scale = 0.5, colour = mod.config.free_rerolls and {0.4, 1, 0.4, 1} or {1, 0.4, 0.4, 1}}} or
+        {n = G.UIT.T, config = {text = "免费重掷：", scale = 0.5, colour = {1, 1, 1, 1}}},
+        in_run and {n = G.UIT.T, config = {text = mod.config.free_rerolls and "开" or "关", scale = 0.5, colour = mod.config.free_rerolls and {0.4, 1, 0.4, 1} or {1, 0.4, 0.4, 1}}} or
         {n = G.UIT.C, config = {align = "cm", padding = 0.05, button = "cs_toggle_free_rerolls_main", hover = true, minw = 0.8, minh = 0.5, colour = mod.config.free_rerolls and {0.4, 0.8, 0.4, 1} or {0.8, 0.4, 0.4, 1}, r = 0.05}, 
-         nodes = {{n = G.UIT.T, config = {text = mod.config.free_rerolls and "YES" or "NO", scale = 0.4, colour = G.C.WHITE}}}}
+         nodes = {{n = G.UIT.T, config = {text = mod.config.free_rerolls and "开" or "关", scale = 0.4, colour = G.C.WHITE}}}}
     }})
 
     -- Bottom buttons - Unlock (yellow), Reset, Close
     table.insert(menu_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.2}, nodes = {
         {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_unlock_all", hover = true, minw = 2, minh = 1, colour = {0.8, 0.8, 0.2, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Unlock", scale = 0.5, colour = G.C.WHITE}}}},
+         nodes = {{n = G.UIT.T, config = {text = "全部解锁", scale = 0.5, colour = G.C.WHITE}}}},
         in_run and {n = G.UIT.C, config = {align = "cm", padding = 0.08, minw = 2, minh = 1, colour = {0.4, 0.2, 0.2, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Reset", scale = 0.5, colour = {0.5, 0.5, 0.5, 1}}}}} or
+         nodes = {{n = G.UIT.T, config = {text = "重置", scale = 0.5, colour = {0.5, 0.5, 0.5, 1}}}}} or
         {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_reset_all", hover = true, minw = 2, minh = 1, colour = {0.8, 0.2, 0.2, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Reset", scale = 0.5, colour = G.C.WHITE}}}},
+         nodes = {{n = G.UIT.T, config = {text = "重置", scale = 0.5, colour = G.C.WHITE}}}},
         {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_close_menu", hover = true, minw = 2, minh = 1, colour = {0.6, 0.6, 0.6, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Close", scale = 0.5, colour = G.C.WHITE}}}}
+         nodes = {{n = G.UIT.T, config = {text = "关闭", scale = 0.5, colour = G.C.WHITE}}}}
     }})
 
     return {
@@ -1967,12 +1990,12 @@ local function create_money_menu()
         nodes = {
             -- Title
             {n = G.UIT.R, config = {align = "cm", padding = 0.2, colour = {0, 0, 0, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "STARTING STATS", scale = 0.8, colour = {1, 1, 1, 1}}}}},
+             nodes = {{n = G.UIT.T, config = {text = "初始数值", scale = 0.8, colour = {1, 1, 1, 1}}}}},
             
             -- Money Row
             {n = G.UIT.R, config = {align = "cm", padding = 0.12}, nodes = {
                 {n = G.UIT.C, config = {align = "cr", minw = 2.5}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Money:", scale = 0.5, colour = {1, 1, 1, 1}}}}},
+                 nodes = {{n = G.UIT.T, config = {text = "金钱：", scale = 0.5, colour = {1, 1, 1, 1}}}}},
                 {n = G.UIT.C, config = {align = "cl", minw = 4}, nodes = {
                     {n = G.UIT.C, config = {align = "cm", padding = 0.05, button = "cs_money_down", hover = true, hold = true, minw = 0.8, minh = 0.8, colour = G.C.RED, r = 0.1, ref_table = {button_id = "money_down"}}, 
                      nodes = {{n = G.UIT.T, config = {text = "-", scale = 0.6, colour = G.C.WHITE}}}},
@@ -1986,7 +2009,7 @@ local function create_money_menu()
             -- Hands Row
             {n = G.UIT.R, config = {align = "cm", padding = 0.12}, nodes = {
                 {n = G.UIT.C, config = {align = "cr", minw = 2.5}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Hands:", scale = 0.5, colour = {1, 1, 1, 1}}}}},
+                 nodes = {{n = G.UIT.T, config = {text = "出牌次数：", scale = 0.5, colour = {1, 1, 1, 1}}}}},
                 {n = G.UIT.C, config = {align = "cl", minw = 4}, nodes = {
                     {n = G.UIT.C, config = {align = "cm", padding = 0.05, button = "cs_hands_down", hover = true, hold = true, minw = 0.8, minh = 0.8, colour = G.C.RED, r = 0.1, ref_table = {button_id = "hands_down"}}, 
                      nodes = {{n = G.UIT.T, config = {text = "-", scale = 0.6, colour = G.C.WHITE}}}},
@@ -2000,7 +2023,7 @@ local function create_money_menu()
             -- Discards Row
             {n = G.UIT.R, config = {align = "cm", padding = 0.12}, nodes = {
                 {n = G.UIT.C, config = {align = "cr", minw = 2.5}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Discards:", scale = 0.5, colour = {1, 1, 1, 1}}}}},
+                 nodes = {{n = G.UIT.T, config = {text = "弃牌次数：", scale = 0.5, colour = {1, 1, 1, 1}}}}},
                 {n = G.UIT.C, config = {align = "cl", minw = 4}, nodes = {
                     {n = G.UIT.C, config = {align = "cm", padding = 0.05, button = "cs_discards_down", hover = true, hold = true, minw = 0.8, minh = 0.8, colour = G.C.RED, r = 0.1, ref_table = {button_id = "discards_down"}}, 
                      nodes = {{n = G.UIT.T, config = {text = "-", scale = 0.6, colour = G.C.WHITE}}}},
@@ -2014,7 +2037,7 @@ local function create_money_menu()
             -- Hand Size Row
             {n = G.UIT.R, config = {align = "cm", padding = 0.12}, nodes = {
                 {n = G.UIT.C, config = {align = "cr", minw = 2.5}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Hand Size:", scale = 0.5, colour = {1, 1, 1, 1}}}}},
+                 nodes = {{n = G.UIT.T, config = {text = "手牌上限：", scale = 0.5, colour = {1, 1, 1, 1}}}}},
                 {n = G.UIT.C, config = {align = "cl", minw = 4}, nodes = {
                     {n = G.UIT.C, config = {align = "cm", padding = 0.05, button = "cs_hand_size_down", hover = true, hold = true, minw = 0.8, minh = 0.8, colour = G.C.RED, r = 0.1, ref_table = {button_id = "hand_size_down"}}, 
                      nodes = {{n = G.UIT.T, config = {text = "-", scale = 0.6, colour = G.C.WHITE}}}},
@@ -2028,7 +2051,7 @@ local function create_money_menu()
             -- Hand Level Row
             {n = G.UIT.R, config = {align = "cm", padding = 0.12}, nodes = {
                 {n = G.UIT.C, config = {align = "cr", minw = 2.5}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Hand Levels:", scale = 0.5, colour = {1, 1, 1, 1}}}}},
+                 nodes = {{n = G.UIT.T, config = {text = "牌型等级：", scale = 0.5, colour = {1, 1, 1, 1}}}}},
                 {n = G.UIT.C, config = {align = "cl", minw = 4}, nodes = {
                     {n = G.UIT.C, config = {align = "cm", padding = 0.05, button = "cs_hand_levels_down", hover = true, hold = true, minw = 0.8, minh = 0.8, colour = G.C.RED, r = 0.1, ref_table = {button_id = "hand_levels_down"}}, 
                      nodes = {{n = G.UIT.T, config = {text = "-", scale = 0.6, colour = G.C.WHITE}}}},
@@ -2042,7 +2065,7 @@ local function create_money_menu()
             -- Joker Slots Row
             {n = G.UIT.R, config = {align = "cm", padding = 0.12}, nodes = {
                 {n = G.UIT.C, config = {align = "cr", minw = 2.5}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Joker Slots:", scale = 0.5, colour = {1, 1, 1, 1}}}}},
+                 nodes = {{n = G.UIT.T, config = {text = "小丑牌槽位：", scale = 0.5, colour = {1, 1, 1, 1}}}}},
                 {n = G.UIT.C, config = {align = "cl", minw = 4}, nodes = {
                     {n = G.UIT.C, config = {align = "cm", padding = 0.05, button = "cs_slots_down", hover = true, hold = true, minw = 0.8, minh = 0.8, colour = G.C.RED, r = 0.1, ref_table = {button_id = "slots_down"}}, 
                      nodes = {{n = G.UIT.T, config = {text = "-", scale = 0.6, colour = G.C.WHITE}}}},
@@ -2056,7 +2079,7 @@ local function create_money_menu()
             -- Consumable Slots Row
             {n = G.UIT.R, config = {align = "cm", padding = 0.12}, nodes = {
                 {n = G.UIT.C, config = {align = "cr", minw = 2.5}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Consumables:", scale = 0.5, colour = {1, 1, 1, 1}}}}},
+                 nodes = {{n = G.UIT.T, config = {text = "消耗牌槽位：", scale = 0.5, colour = {1, 1, 1, 1}}}}},
                 {n = G.UIT.C, config = {align = "cl", minw = 4}, nodes = {
                     {n = G.UIT.C, config = {align = "cm", padding = 0.05, button = "cs_consumables_down", hover = true, hold = true, minw = 0.8, minh = 0.8, colour = G.C.RED, r = 0.1, ref_table = {button_id = "consumables_down"}}, 
                      nodes = {{n = G.UIT.T, config = {text = "-", scale = 0.6, colour = G.C.WHITE}}}},
@@ -2069,7 +2092,7 @@ local function create_money_menu()
             
             -- Ante Scaling Row - compressed
             {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
-                {n = G.UIT.T, config = {text = "Ante Scaling:", scale = 0.45, colour = {1, 1, 1, 1}}}
+                {n = G.UIT.T, config = {text = "底注难度倍率：", scale = 0.45, colour = {1, 1, 1, 1}}}
             }},
             
             {n = G.UIT.R, config = {align = "cm", padding = 0.05}, nodes = {
@@ -2093,9 +2116,9 @@ local function create_money_menu()
             -- Bottom buttons
             {n = G.UIT.R, config = {align = "cm", padding = 0.2}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_reset_money_stats", hover = true, minw = 3, minh = 1, colour = G.C.RED, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Reset", scale = 0.5, colour = G.C.WHITE}}}},
+                 nodes = {{n = G.UIT.T, config = {text = "重置", scale = 0.5, colour = G.C.WHITE}}}},
                 {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_back_to_main", hover = true, minw = 3, minh = 1, colour = {0.6, 0.6, 0.6, 1}, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Back", scale = 0.5, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "返回", scale = 0.5, colour = G.C.WHITE}}}}
             }}
         }
     }
@@ -2135,11 +2158,11 @@ end
 -- Deck builder with clean uniform styling
 local function create_deck_builder()
     local suits = {'S', 'H', 'D', 'C'}
-    local suit_names = {'Spad', 'Hear', 'Diam', 'Club'}
+    local suit_names = {'黑桃', '红桃', '方块', '梅花'}
     local ranks = {'A', '2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K'}
     
     -- Get current enhancement/seal/edition display names
-    local current_enhancement_name = "Base"
+    local current_enhancement_name = "普通"
     for _, enh in ipairs(enhancement_options) do
         if enh.key == mod.config.current_enhancement then
             current_enhancement_name = enh.name
@@ -2147,7 +2170,7 @@ local function create_deck_builder()
         end
     end
     
-    local current_seal_name = "No Seal"
+    local current_seal_name = "无蜡封"
     for _, seal in ipairs(seal_options) do
         if seal.key == mod.config.current_seal then
             current_seal_name = seal.name
@@ -2155,7 +2178,7 @@ local function create_deck_builder()
         end
     end
     
-    local current_edition_name = "Base"
+    local current_edition_name = "普通"
     for _, edition in ipairs(card_edition_options) do
         if edition.key == mod.config.current_edition then
             current_edition_name = edition.name
@@ -2171,22 +2194,22 @@ local function create_deck_builder()
     local deck_nodes = {
         -- Title
         {n = G.UIT.R, config = {align = "cm", padding = 0.2, colour = {0, 0, 0, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "DECK BUILDER", scale = 0.8, colour = {1, 1, 1, 1}}}}},
+         nodes = {{n = G.UIT.T, config = {text = "牌组编辑器", scale = 0.8, colour = {1, 1, 1, 1}}}}},
         
         -- Deck info
         {n = G.UIT.R, config = {align = "cm", padding = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Deck: " .. mod.config.current_deck_name, scale = 0.5, colour = {1, 1, 1, 1}}}}},
+         nodes = {{n = G.UIT.T, config = {text = "牌组：" .. mod.config.current_deck_name, scale = 0.5, colour = {1, 1, 1, 1}}}}},
         
         {n = G.UIT.R, config = {align = "cm", padding = 0.05}, 
-         nodes = {{n = G.UIT.T, config = {text = "Size: " .. tostring(#mod.config.custom_deck) .. "/104 cards", scale = 0.5, colour = {1, 1, 1, 1}}}}},
+         nodes = {{n = G.UIT.T, config = {text = "数量：" .. tostring(#mod.config.custom_deck) .. "/104 张牌", scale = 0.5, colour = {1, 1, 1, 1}}}}},
         
 		-- Instructions
         {n = G.UIT.R, config = {align = "cm", padding = 0.05}, 
-         nodes = {{n = G.UIT.T, config = {text = "Click to add, Shift+Click to remove", scale = 0.35, colour = {0.7, 0.7, 0.7, 1}}}}},
+         nodes = {{n = G.UIT.T, config = {text = "点击添加，Shift+点击移除", scale = 0.35, colour = {0.7, 0.7, 0.7, 1}}}}},
 		 
 		-- Instructions
         {n = G.UIT.R, config = {align = "cm", padding = 0.05}, 
-         nodes = {{n = G.UIT.T, config = {text = "Make sure to have at least one of every suit", scale = 0.35, colour = {0.7, 0.7, 0.7, 1}}}}},
+         nodes = {{n = G.UIT.T, config = {text = "请确保每种花色至少有一张牌", scale = 0.35, colour = {0.7, 0.7, 0.7, 1}}}}},
         
         -- Spacing
         {n = G.UIT.R, config = {align = "cm", padding = 0.05}, nodes = {}},
@@ -2194,20 +2217,20 @@ local function create_deck_builder()
         -- Enhancement/Seal/Edition controls - uniform buttons
         {n = G.UIT.R, config = {align = "cm", padding = 0.15}, nodes = {
             {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_cycle_enhancement", hover = true, minw = 3.2, minh = 1, colour = enhancement_color, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Enhancement: " .. current_enhancement_name, scale = 0.4, colour = G.C.WHITE}}}},
+             nodes = {{n = G.UIT.T, config = {text = "增强：" .. current_enhancement_name, scale = 0.4, colour = G.C.WHITE}}}},
             {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_cycle_seal", hover = true, minw = 3.2, minh = 1, colour = seal_color, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Seal: " .. current_seal_name, scale = 0.4, colour = G.C.WHITE}}}}
+             nodes = {{n = G.UIT.T, config = {text = "蜡封：" .. current_seal_name, scale = 0.4, colour = G.C.WHITE}}}}
         }},
         
         {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
             {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_cycle_edition", hover = true, minw = 6.5, minh = 1, colour = edition_color, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Edition: " .. current_edition_name, scale = 0.4, colour = G.C.WHITE}}}}
+             nodes = {{n = G.UIT.T, config = {text = "版本：" .. current_edition_name, scale = 0.4, colour = G.C.WHITE}}}}
         }},
         
         -- Quick actions
         {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
             {n = G.UIT.C, config = {align = "cm", padding = 0.05, button = "cs_standard_deck", hover = true, minw = 3, minh = 0.9, colour = G.C.GREEN, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Standard 52", scale = 0.4, colour = G.C.WHITE}}}}
+             nodes = {{n = G.UIT.T, config = {text = "标准 52 张", scale = 0.4, colour = G.C.WHITE}}}}
         }}
     }
     
@@ -2292,11 +2315,11 @@ local function create_deck_builder()
     -- Bottom action buttons
     table.insert(deck_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.3}, nodes = {
         {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_clear_deck", hover = true, minw = 2, minh = 0.9, colour = G.C.RED, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Clear All", scale = 0.4, colour = G.C.WHITE}}}},
+         nodes = {{n = G.UIT.T, config = {text = "全部清空", scale = 0.4, colour = G.C.WHITE}}}},
         {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_save_deck", hover = true, minw = 2, minh = 0.9, colour = {0.8, 0.6, 0.2, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Save Deck", scale = 0.4, colour = G.C.WHITE}}}},
+         nodes = {{n = G.UIT.T, config = {text = "保存牌组", scale = 0.4, colour = G.C.WHITE}}}},
         {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_back_to_main", hover = true, minw = 2, minh = 0.9, colour = {0.6, 0.6, 0.6, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Back", scale = 0.4, colour = G.C.WHITE}}}}
+         nodes = {{n = G.UIT.T, config = {text = "返回", scale = 0.4, colour = G.C.WHITE}}}}
     }})
     
     return {
@@ -2314,21 +2337,21 @@ local function create_starting_items_menu()
         nodes = {
             -- Title
             {n = G.UIT.R, config = {align = "cm", padding = 0.2, colour = {0, 0, 0, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "STARTING ITEMS", scale = 0.8, colour = {1, 1, 1, 1}}}}},
+             nodes = {{n = G.UIT.T, config = {text = "初始物品", scale = 0.8, colour = {1, 1, 1, 1}}}}},
             
             -- Stats display
             {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
-                {n = G.UIT.T, config = {text = "Selected Jokers: ", scale = 0.5, colour = {1, 1, 1, 1}}},
+                {n = G.UIT.T, config = {text = "已选小丑牌：", scale = 0.5, colour = {1, 1, 1, 1}}},
                 {n = G.UIT.T, config = {text = tostring(#mod.config.starting_jokers), scale = 0.5, colour = {1, 0.5, 0.8, 1}}}
             }},
             
             {n = G.UIT.R, config = {align = "cm", padding = 0.05}, nodes = {
-                {n = G.UIT.T, config = {text = "Selected Vouchers: ", scale = 0.5, colour = {1, 1, 1, 1}}},
+                {n = G.UIT.T, config = {text = "已选优惠券：", scale = 0.5, colour = {1, 1, 1, 1}}},
                 {n = G.UIT.T, config = {text = tostring(#mod.config.starting_vouchers), scale = 0.5, colour = {0.4, 1, 0.4, 1}}}
             }},
             
             {n = G.UIT.R, config = {align = "cm", padding = 0.05}, nodes = {
-                {n = G.UIT.T, config = {text = "Selected Tags: ", scale = 0.5, colour = {1, 1, 1, 1}}},
+                {n = G.UIT.T, config = {text = "已选标签：", scale = 0.5, colour = {1, 1, 1, 1}}},
                 {n = G.UIT.T, config = {text = tostring(#mod.config.starting_tags), scale = 0.5, colour = {1, 0.8, 0.2, 1}}}
             }},
             
@@ -2338,25 +2361,25 @@ local function create_starting_items_menu()
             -- Menu buttons - joker button is purple, tags button is chrome/metallic
             {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_open_joker_menu", hover = true, minw = 6.2, minh = 1, colour = {0.6, 0.2, 0.8, 1}, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Select Jokers", scale = 0.5, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "选择小丑牌", scale = 0.5, colour = G.C.WHITE}}}}
             }},
             
             {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_open_voucher_menu", hover = true, minw = 6.2, minh = 1, colour = {0.8, 0.2, 0.6, 1}, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Select Vouchers", scale = 0.5, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "选择优惠券", scale = 0.5, colour = G.C.WHITE}}}}
             }},
             
             {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_open_tag_menu", hover = true, minw = 6.2, minh = 1, colour = {0.7, 0.7, 0.8, 1}, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Select Tags", scale = 0.5, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "选择标签", scale = 0.5, colour = G.C.WHITE}}}}
             }},
             
             -- Clear buttons
             {n = G.UIT.R, config = {align = "cm", padding = 0.15}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_clear_all_starting_items", hover = true, minw = 3, minh = 0.9, colour = G.C.RED, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Clear All", scale = 0.4, colour = G.C.WHITE}}}},
+                 nodes = {{n = G.UIT.T, config = {text = "全部清空", scale = 0.4, colour = G.C.WHITE}}}},
                 {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_back_to_main", hover = true, minw = 3, minh = 0.9, colour = {0.6, 0.6, 0.6, 1}, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Back", scale = 0.4, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "返回", scale = 0.4, colour = G.C.WHITE}}}}
             }}
         }
     }
@@ -2390,6 +2413,10 @@ local function format_name(name, mod_name)
         return tostring(name)
     end
     
+    local center = G.P_CENTERS and G.P_CENTERS[name]
+    local tag = G.P_TAGS and G.P_TAGS[name]
+    local localized = cs_localized_name(name, center or tag, tag and "Tag" or nil)
+    if localized then return localized end
     local display_name = name
     
     -- First, check if this is a key and we can get the actual name from game data
@@ -2575,15 +2602,15 @@ end
 local joker_nodes = {
     -- Title
     {n = G.UIT.R, config = {align = "cm", padding = 0.2, colour = {0, 0, 0, 1}, r = 0.1}, 
-     nodes = {{n = G.UIT.T, config = {text = "SELECT STARTING JOKERS", scale = 0.8, colour = {1, 1, 1, 1}}}}},
+     nodes = {{n = G.UIT.T, config = {text = "选择初始小丑牌", scale = 0.8, colour = {1, 1, 1, 1}}}}},
     -- Instructions
     {n = G.UIT.R, config = {align = "cm", padding = 0.05}, 
-     nodes = {{n = G.UIT.T, config = {text = "Click to add, Shift+Click to remove", scale = 0.35, colour = {0.7, 0.7, 0.7, 1}}}}
+     nodes = {{n = G.UIT.T, config = {text = "点击添加，Shift+点击移除", scale = 0.35, colour = {0.7, 0.7, 0.7, 1}}}}
     }
 }
 
 -- Edition selection
-local current_edition_name = "Base"
+local current_edition_name = "普通"
 for _, edition in ipairs(joker_edition_options) do
     if edition.key == mod.config.starting_joker_edition then
         current_edition_name = edition.name
@@ -2597,7 +2624,7 @@ local button_color = edition_colors[mod.config.starting_joker_edition] or {0.6, 
 table.insert(joker_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
     {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_cycle_starting_joker_edition", hover = true, 
         minw = 4, minh = 0.8, colour = button_color, r = 0.1}, 
-     nodes = {{n = G.UIT.T, config = {text = "Edition: " .. current_edition_name, scale = 0.5, colour = G.C.WHITE}}}}
+     nodes = {{n = G.UIT.T, config = {text = "版本：" .. current_edition_name, scale = 0.5, colour = G.C.WHITE}}}}
 }})
 	
 
@@ -2606,10 +2633,10 @@ if table_length(modded_jokers_by_mod) > 0 then
     table.insert(joker_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
         {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_switch_to_vanilla", hover = true, minw = 2.5, minh = 0.8, 
             colour = mod.config.active_joker_tab == "vanilla" and {0.6, 0.2, 0.8, 1} or {0.3, 0.3, 0.3, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Vanilla", scale = 0.5, colour = G.C.WHITE}}}},
+         nodes = {{n = G.UIT.T, config = {text = "原版", scale = 0.5, colour = G.C.WHITE}}}},
         {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_switch_to_modded", hover = true, minw = 2.5, minh = 0.8, 
             colour = mod.config.active_joker_tab == "modded" and {0.6, 0.2, 0.8, 1} or {0.3, 0.3, 0.3, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Modded", scale = 0.5, colour = G.C.WHITE}}}}
+         nodes = {{n = G.UIT.T, config = {text = "模组", scale = 0.5, colour = G.C.WHITE}}}}
     }})
 end
     
@@ -2656,7 +2683,7 @@ end
                         ref_table = {mod_name = mod_name},
                         hover = true, minw = 1.8, minh = 0.6, 
                         colour = mod.config.active_mod_tab == mod_name and {0.2, 0.8, 0.8, 1} or {0.3, 0.3, 0.3, 1}, r = 0.08}, 
-                    nodes = {{n = G.UIT.T, config = {text = string.sub(mod_name, 1, 12), scale = 0.3, colour = G.C.WHITE}}}
+                    nodes = {{n = G.UIT.T, config = {text = cs_text_sub(mod_name, 1, 12), scale = 0.3, colour = G.C.WHITE}}}
                 })
             end
         end
@@ -2681,7 +2708,7 @@ end
 
 -- Info
 table.insert(joker_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}, 
-     nodes = {{n = G.UIT.T, config = {text = "Page: " .. current_page .. "/" .. total_pages, scale = 0.5, colour = {1, 1, 1, 1}}}}}
+     nodes = {{n = G.UIT.T, config = {text = "页码：" .. current_page .. "/" .. total_pages, scale = 0.5, colour = {1, 1, 1, 1}}}}}
 )
     
     -- Joker grid
@@ -2708,7 +2735,7 @@ table.insert(joker_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1},
             -- Get joker name
             local joker_name = joker_key
             if G.P_CENTERS[joker_key] and G.P_CENTERS[joker_key].name then
-                joker_name = G.P_CENTERS[joker_key].name
+                joker_name = joker_key
             else
                 joker_name = joker_key
             end
@@ -2742,12 +2769,12 @@ if count > 0 then
 end
 
 -- Truncate or scale
-if #display_name > max_chars then
+if cs_text_length(display_name) > max_chars then
     -- Try scaling first
-    text_scale = text_scale * (max_chars / #display_name)
+    text_scale = text_scale * (max_chars / cs_text_length(display_name))
     if text_scale < 0.15 then
         -- If too small, truncate instead
-        display_name = string.sub(display_name, 1, max_chars - 2) .. ".."
+        display_name = cs_text_sub(display_name, 1, max_chars - 2) .. ".."
         text_scale = 0.23
     end
 end
@@ -2790,22 +2817,22 @@ table.insert(joker_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}, 
 if total_pages > 1 then
     table.insert(joker_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.15}, nodes = {
         {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_joker_prev_page", hover = true, minw = 2.5, minh = 1, colour = {0.8, 0.2, 0.2, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "◀ Previous", scale = 0.5, colour = G.C.WHITE}}}},
+         nodes = {{n = G.UIT.T, config = {text = "◀ 上一页", scale = 0.5, colour = G.C.WHITE}}}},
         {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_clear_jokers", hover = true, minw = 2.5, minh = 1, colour = G.C.RED, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Clear All", scale = 0.5, colour = G.C.WHITE}}}},
+         nodes = {{n = G.UIT.T, config = {text = "全部清空", scale = 0.5, colour = G.C.WHITE}}}},
         {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_joker_next_page", hover = true, minw = 2.5, minh = 1, colour = {0.2, 0.8, 0.2, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Next ▶", scale = 0.5, colour = G.C.WHITE}}}}
+         nodes = {{n = G.UIT.T, config = {text = "下一页 ▶", scale = 0.5, colour = G.C.WHITE}}}}
     }})
 else
     table.insert(joker_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.15}, nodes = {
         {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_clear_jokers", hover = true, minw = 2.5, minh = 1, colour = G.C.RED, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Clear All", scale = 0.5, colour = G.C.WHITE}}}}
+         nodes = {{n = G.UIT.T, config = {text = "全部清空", scale = 0.5, colour = G.C.WHITE}}}}
     }})
 end
 
 table.insert(joker_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
     {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_back_to_starting_items", hover = true, minw = 2.5, minh = 1, colour = {0.6, 0.6, 0.6, 1}, r = 0.1}, 
-     nodes = {{n = G.UIT.T, config = {text = "Back", scale = 0.5, colour = G.C.WHITE}}}}
+     nodes = {{n = G.UIT.T, config = {text = "返回", scale = 0.5, colour = G.C.WHITE}}}}
 }})
 
     
@@ -2855,11 +2882,11 @@ end
 local voucher_nodes = {
     -- Title
     {n = G.UIT.R, config = {align = "cm", padding = 0.2, colour = {0, 0, 0, 1}, r = 0.1}, 
-     nodes = {{n = G.UIT.T, config = {text = "SELECT STARTING VOUCHERS", scale = 0.8, colour = {1, 1, 1, 1}}}}},
+     nodes = {{n = G.UIT.T, config = {text = "选择初始优惠券", scale = 0.8, colour = {1, 1, 1, 1}}}}},
     
     -- Instructions
     {n = G.UIT.R, config = {align = "cm", padding = 0.05}, 
-     nodes = {{n = G.UIT.T, config = {text = "Click to add/remove, Shift+Click to force remove", scale = 0.35, colour = {0.7, 0.7, 0.7, 1}}}}},
+     nodes = {{n = G.UIT.T, config = {text = "点击添加或移除，Shift+点击强制移除", scale = 0.35, colour = {0.7, 0.7, 0.7, 1}}}}},
 
     -- Main tabs (Vanilla / Modded) - only show if modded vouchers exist
     {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {}}
@@ -2870,10 +2897,10 @@ if table_length(modded_vouchers_by_mod) > 0 then
     voucher_nodes[3].nodes = {  -- Now properly modify the table AFTER it's created
         {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_voucher_switch_to_vanilla", hover = true, minw = 2.5, minh = 0.8, 
             colour = mod.config.active_voucher_tab == "vanilla" and {0.6, 0.2, 0.8, 1} or {0.3, 0.3, 0.3, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Vanilla", scale = 0.5, colour = G.C.WHITE}}}},
+         nodes = {{n = G.UIT.T, config = {text = "原版", scale = 0.5, colour = G.C.WHITE}}}},
         {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_voucher_switch_to_modded", hover = true, minw = 2.5, minh = 0.8, 
             colour = mod.config.active_voucher_tab == "modded" and {0.6, 0.2, 0.8, 1} or {0.3, 0.3, 0.3, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Modded", scale = 0.5, colour = G.C.WHITE}}}}
+         nodes = {{n = G.UIT.T, config = {text = "模组", scale = 0.5, colour = G.C.WHITE}}}}
     }
     
     -- Add mod-specific tabs if viewing modded vouchers
@@ -2915,10 +2942,10 @@ if table_length(modded_vouchers_by_mod) > 0 then
                 local max_chars = 12
                 local display_name = mod_name
                 
-                if #display_name > max_chars then
-                    text_scale = text_scale * (max_chars / #display_name)
+                if cs_text_length(display_name) > max_chars then
+                    text_scale = text_scale * (max_chars / cs_text_length(display_name))
                     if text_scale < 0.2 then
-                        display_name = string.sub(display_name, 1, max_chars - 2) .. ".."
+                        display_name = cs_text_sub(display_name, 1, max_chars - 2) .. ".."
                         text_scale = 0.3
                     end
                 end
@@ -2954,7 +2981,7 @@ end
     
 -- Info
 table.insert(voucher_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}, 
-     nodes = {{n = G.UIT.T, config = {text = "Page: " .. current_page .. "/" .. total_pages, scale = 0.5, colour = {1, 1, 1, 1}}}}}
+     nodes = {{n = G.UIT.T, config = {text = "页码：" .. current_page .. "/" .. total_pages, scale = 0.5, colour = {1, 1, 1, 1}}}}}
 )
     
     local voucher_grid = {n = G.UIT.R, config = {align = "cm", padding = 0.05}, nodes = {}}
@@ -2978,7 +3005,7 @@ table.insert(voucher_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}
             
             local voucher_name = voucher_key
             if G.P_CENTERS[voucher_key] and G.P_CENTERS[voucher_key].name then
-                voucher_name = G.P_CENTERS[voucher_key].name
+                voucher_name = voucher_key
             else
                 voucher_name = voucher_key
             end
@@ -3002,12 +3029,12 @@ table.insert(voucher_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}
             local display_name = voucher_name
             
             -- Truncate or scale
-            if #display_name > max_chars then
+            if cs_text_length(display_name) > max_chars then
                 -- Try scaling first
-                text_scale = text_scale * (max_chars / #display_name)
+                text_scale = text_scale * (max_chars / cs_text_length(display_name))
                 if text_scale < 0.18 then
                     -- If too small, truncate instead
-                    display_name = string.sub(display_name, 1, max_chars - 2) .. ".."
+                    display_name = cs_text_sub(display_name, 1, max_chars - 2) .. ".."
                     text_scale = 0.26
                 end
             end
@@ -3042,23 +3069,23 @@ table.insert(voucher_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}
 if total_pages > 1 then
     table.insert(voucher_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.15}, nodes = {
         {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_voucher_prev_page", hover = true, minw = 2.5, minh = 1, colour = {0.8, 0.2, 0.2, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "◀ Previous", scale = 0.5, colour = G.C.WHITE}}}},
+         nodes = {{n = G.UIT.T, config = {text = "◀ 上一页", scale = 0.5, colour = G.C.WHITE}}}},
         {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_clear_vouchers", hover = true, minw = 2.5, minh = 1, colour = G.C.RED, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Clear All", scale = 0.5, colour = G.C.WHITE}}}},
+         nodes = {{n = G.UIT.T, config = {text = "全部清空", scale = 0.5, colour = G.C.WHITE}}}},
         {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_voucher_next_page", hover = true, minw = 2.5, minh = 1, colour = {0.2, 0.8, 0.2, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Next ▶", scale = 0.5, colour = G.C.WHITE}}}}
+         nodes = {{n = G.UIT.T, config = {text = "下一页 ▶", scale = 0.5, colour = G.C.WHITE}}}}
     }})
     
     table.insert(voucher_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
         {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_back_to_starting_items", hover = true, minw = 2.5, minh = 1, colour = {0.6, 0.6, 0.6, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Back", scale = 0.5, colour = G.C.WHITE}}}}
+         nodes = {{n = G.UIT.T, config = {text = "返回", scale = 0.5, colour = G.C.WHITE}}}}
     }})
 else
     table.insert(voucher_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.3}, nodes = {
         {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_clear_vouchers", hover = true, minw = 2.5, minh = 1, colour = G.C.RED, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Clear All", scale = 0.5, colour = G.C.WHITE}}}},
+         nodes = {{n = G.UIT.T, config = {text = "全部清空", scale = 0.5, colour = G.C.WHITE}}}},
         {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_back_to_starting_items", hover = true, minw = 2.5, minh = 1, colour = {0.6, 0.6, 0.6, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Back", scale = 0.5, colour = G.C.WHITE}}}}
+         nodes = {{n = G.UIT.T, config = {text = "返回", scale = 0.5, colour = G.C.WHITE}}}}
     }})
 end
     
@@ -3108,10 +3135,10 @@ end
     local tag_nodes = {
         -- Title
         {n = G.UIT.R, config = {align = "cm", padding = 0.2, colour = {0, 0, 0, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "SELECT STARTING TAGS", scale = 0.8, colour = {1, 1, 1, 1}}}}},
+         nodes = {{n = G.UIT.T, config = {text = "选择初始标签", scale = 0.8, colour = {1, 1, 1, 1}}}}},
         -- Instructions
     {n = G.UIT.R, config = {align = "cm", padding = 0.05}, 
-     nodes = {{n = G.UIT.T, config = {text = "Click to add/remove, Shift+Click to force remove", scale = 0.35, colour = {0.7, 0.7, 0.7, 1}}}}},
+     nodes = {{n = G.UIT.T, config = {text = "点击添加或移除，Shift+点击强制移除", scale = 0.35, colour = {0.7, 0.7, 0.7, 1}}}}},
         -- Main tabs (Vanilla / Modded) - only show if modded tags exist
     {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {}}
 	}
@@ -3121,10 +3148,10 @@ if table_length(modded_tags_by_mod) > 0 then
     tag_nodes[3].nodes = {
             {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_tag_switch_to_vanilla", hover = true, minw = 2.5, minh = 0.8, 
                 colour = mod.config.active_tag_tab == "vanilla" and {0.6, 0.2, 0.8, 1} or {0.3, 0.3, 0.3, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Vanilla", scale = 0.5, colour = G.C.WHITE}}}},
+             nodes = {{n = G.UIT.T, config = {text = "原版", scale = 0.5, colour = G.C.WHITE}}}},
             {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_tag_switch_to_modded", hover = true, minw = 2.5, minh = 0.8, 
                 colour = mod.config.active_tag_tab == "modded" and {0.6, 0.2, 0.8, 1} or {0.3, 0.3, 0.3, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Modded", scale = 0.5, colour = G.C.WHITE}}}}
+             nodes = {{n = G.UIT.T, config = {text = "模组", scale = 0.5, colour = G.C.WHITE}}}}
         }
         
         -- Add mod-specific tabs if viewing modded tags
@@ -3141,7 +3168,7 @@ if table_length(modded_tags_by_mod) > 0 then
                             ref_table = {mod_name = mod_name},
                             hover = true, minw = 1.8, minh = 0.6, 
                             colour = mod.config.active_tag_mod_tab == mod_name and {0.2, 0.8, 0.8, 1} or {0.3, 0.3, 0.3, 1}, r = 0.08}, 
-                        nodes = {{n = G.UIT.T, config = {text = string.sub(mod_name, 1, 12), scale = 0.3, colour = G.C.WHITE}}}
+                        nodes = {{n = G.UIT.T, config = {text = cs_text_sub(mod_name, 1, 12), scale = 0.3, colour = G.C.WHITE}}}
                     })
                 end
             end
@@ -3152,7 +3179,7 @@ if table_length(modded_tags_by_mod) > 0 then
    
 -- Info
 table.insert(tag_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}, 
-     nodes = {{n = G.UIT.T, config = {text = "Page: " .. current_page .. "/" .. total_pages, scale = 0.5, colour = {1, 1, 1, 1}}}}}
+     nodes = {{n = G.UIT.T, config = {text = "页码：" .. current_page .. "/" .. total_pages, scale = 0.5, colour = {1, 1, 1, 1}}}}}
 )
     
     -- Tag grid (rest remains the same)
@@ -3177,7 +3204,7 @@ table.insert(tag_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1},
             
             local tag_name
             if G.P_TAGS[tag_key] and G.P_TAGS[tag_key].name then
-                tag_name = G.P_TAGS[tag_key].name
+                tag_name = tag_key
             else
                 tag_name = tag_key
             end
@@ -3199,12 +3226,12 @@ table.insert(tag_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1},
             local display_name = tag_name
             
             -- Truncate or scale
-            if #display_name > max_chars then
+            if cs_text_length(display_name) > max_chars then
                 -- Try scaling first
-                text_scale = text_scale * (max_chars / #display_name)
+                text_scale = text_scale * (max_chars / cs_text_length(display_name))
                 if text_scale < 0.18 then
                     -- If too small, truncate instead
-                    display_name = string.sub(display_name, 1, max_chars - 2) .. ".."
+                    display_name = cs_text_sub(display_name, 1, max_chars - 2) .. ".."
                     text_scale = 0.26
                 end
             end
@@ -3239,22 +3266,22 @@ table.insert(tag_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1},
 if total_pages > 1 then
     table.insert(tag_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.15}, nodes = {
         {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_tag_prev_page", hover = true, minw = 2.5, minh = 1, colour = {0.8, 0.2, 0.2, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "◀ Previous", scale = 0.5, colour = G.C.WHITE}}}},
+         nodes = {{n = G.UIT.T, config = {text = "◀ 上一页", scale = 0.5, colour = G.C.WHITE}}}},
         {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_clear_tags", hover = true, minw = 2.5, minh = 1, colour = G.C.RED, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Clear All", scale = 0.5, colour = G.C.WHITE}}}},
+         nodes = {{n = G.UIT.T, config = {text = "全部清空", scale = 0.5, colour = G.C.WHITE}}}},
         {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_tag_next_page", hover = true, minw = 2.5, minh = 1, colour = {0.2, 0.8, 0.2, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Next ▶", scale = 0.5, colour = G.C.WHITE}}}}
+         nodes = {{n = G.UIT.T, config = {text = "下一页 ▶", scale = 0.5, colour = G.C.WHITE}}}}
     }})
 else
     table.insert(tag_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.15}, nodes = {
         {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_clear_tags", hover = true, minw = 2.5, minh = 1, colour = G.C.RED, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Clear All", scale = 0.5, colour = G.C.WHITE}}}}
+         nodes = {{n = G.UIT.T, config = {text = "全部清空", scale = 0.5, colour = G.C.WHITE}}}}
     }})
 end
 
 table.insert(tag_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
     {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_back_to_starting_items", hover = true, minw = 2.5, minh = 1, colour = {0.6, 0.6, 0.6, 1}, r = 0.1}, 
-     nodes = {{n = G.UIT.T, config = {text = "Back", scale = 0.5, colour = G.C.WHITE}}}}
+     nodes = {{n = G.UIT.T, config = {text = "返回", scale = 0.5, colour = G.C.WHITE}}}}
 }})
     
     return {
@@ -3269,11 +3296,11 @@ local function create_give_item_menu()
     local give_nodes = {
         -- Title
         {n = G.UIT.R, config = {align = "cm", padding = 0.2, colour = {0, 0, 0, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "GIVE ITEM", scale = 0.8, colour = {1, 1, 1, 1}}}}},
+         nodes = {{n = G.UIT.T, config = {text = "赠送物品", scale = 0.8, colour = {1, 1, 1, 1}}}}},
         
         -- Instructions
         {n = G.UIT.R, config = {align = "cm", padding = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Select item type to give", scale = 0.5, colour = {1, 1, 1, 1}}}}},
+         nodes = {{n = G.UIT.T, config = {text = "选择要赠送的物品类型", scale = 0.5, colour = {1, 1, 1, 1}}}}},
         
         -- Spacing
         {n = G.UIT.R, config = {align = "cm", padding = 0.15}, nodes = {}},
@@ -3281,32 +3308,32 @@ local function create_give_item_menu()
         -- Item type buttons (reordered - joker moved below card)
         {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
             {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_give_money", hover = true, minw = 3, minh = 1, colour = {1, 1, 0.2, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Money", scale = 0.5, colour = G.C.WHITE}}}}
+             nodes = {{n = G.UIT.T, config = {text = "金钱", scale = 0.5, colour = G.C.WHITE}}}}
         }},
         
         {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
             {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_give_card", hover = true, minw = 3, minh = 1, colour = {0.2, 0.6, 0.8, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Card", scale = 0.5, colour = G.C.WHITE}}}}
+             nodes = {{n = G.UIT.T, config = {text = "游戏牌", scale = 0.5, colour = G.C.WHITE}}}}
         }},
 
         {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
             {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_give_consumable", hover = true, minw = 3, minh = 1, colour = {0.8, 0.2, 0.8, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Consumable", scale = 0.5, colour = G.C.WHITE}}}}
+             nodes = {{n = G.UIT.T, config = {text = "消耗牌", scale = 0.5, colour = G.C.WHITE}}}}
         }},
         
         {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
             {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_give_joker", hover = true, minw = 3, minh = 1, colour = {0.6, 0.2, 0.8, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Joker", scale = 0.5, colour = G.C.WHITE}}}}
+             nodes = {{n = G.UIT.T, config = {text = "小丑牌", scale = 0.5, colour = G.C.WHITE}}}}
         }},
 
         {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
             {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_give_voucher", hover = true, minw = 3, minh = 1, colour = {0.8, 0.2, 0.6, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Voucher", scale = 0.5, colour = G.C.WHITE}}}}
+             nodes = {{n = G.UIT.T, config = {text = "优惠券", scale = 0.5, colour = G.C.WHITE}}}}
         }},
         
         {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
             {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_give_tag", hover = true, minw = 3, minh = 1, colour = {0.7, 0.7, 0.8, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Tag", scale = 0.5, colour = G.C.WHITE}}}}
+             nodes = {{n = G.UIT.T, config = {text = "标签", scale = 0.5, colour = G.C.WHITE}}}}
         }},
         
         -- Spacing
@@ -3315,7 +3342,7 @@ local function create_give_item_menu()
         -- Back button
         {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
             {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_back_to_main", hover = true, minw = 3, minh = 1, colour = {0.6, 0.6, 0.6, 1}, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Back", scale = 0.5, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "返回", scale = 0.5, colour = G.C.WHITE}}}}
         }}
     }
     
@@ -3343,11 +3370,11 @@ local function create_give_money_menu()
         nodes = {
             -- Title
             {n = G.UIT.R, config = {align = "cm", padding = 0.2, colour = {0, 0, 0, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "GIVE MONEY", scale = 0.8, colour = {1, 1, 1, 1}}}}},
+             nodes = {{n = G.UIT.T, config = {text = "赠送金钱", scale = 0.8, colour = {1, 1, 1, 1}}}}},
             
             -- Current money display
             {n = G.UIT.R, config = {align = "cm", padding = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Current: $" .. (G.GAME and G.GAME.dollars or 0), scale = 0.5, colour = {1, 1, 0, 1}}}}},
+             nodes = {{n = G.UIT.T, config = {text = "当前：$" .. (G.GAME and G.GAME.dollars or 0), scale = 0.5, colour = {1, 1, 0, 1}}}}},
             
             -- Spacing
             {n = G.UIT.R, config = {align = "cm", padding = 0.15}, nodes = {}},
@@ -3355,27 +3382,27 @@ local function create_give_money_menu()
             -- Money amount buttons with gradient
             {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_give_money_10", hover = true, minw = 3, minh = 1, colour = gradient_colors[1], r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Give $10", scale = 0.5, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "增加 $10", scale = 0.5, colour = G.C.WHITE}}}}
             }},
             
             {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_give_money_50", hover = true, minw = 3, minh = 1, colour = gradient_colors[2], r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Give $50", scale = 0.5, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "增加 $50", scale = 0.5, colour = G.C.WHITE}}}}
             }},
             
             {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_give_money_100", hover = true, minw = 3, minh = 1, colour = gradient_colors[3], r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Give $100", scale = 0.5, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "增加 $100", scale = 0.5, colour = G.C.WHITE}}}}
             }},
             
             {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_give_money_1000", hover = true, minw = 3, minh = 1, colour = gradient_colors[4], r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Give $1000", scale = 0.5, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "增加 $1000", scale = 0.5, colour = G.C.WHITE}}}}
             }},
             
             {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_give_money_infinite", hover = true, minw = 3, minh = 1, colour = gradient_colors[5], r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Infinite Money", scale = 0.5, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "无限金钱", scale = 0.5, colour = G.C.WHITE}}}}
             }},
             
             -- Spacing
@@ -3384,9 +3411,9 @@ local function create_give_money_menu()
             -- Bottom buttons
             {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_reset_money_to_zero", hover = true, minw = 2.5, minh = 1, colour = G.C.RED, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Reset", scale = 0.5, colour = G.C.WHITE}}}},
+                 nodes = {{n = G.UIT.T, config = {text = "重置", scale = 0.5, colour = G.C.WHITE}}}},
                 {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_back_to_give", hover = true, minw = 2.5, minh = 1, colour = {0.6, 0.6, 0.6, 1}, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Back", scale = 0.5, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "返回", scale = 0.5, colour = G.C.WHITE}}}}
             }}
         }
     }
@@ -3400,7 +3427,7 @@ local function create_consumable_type_menu()
         nodes = {
             -- Title
             {n = G.UIT.R, config = {align = "cm", padding = 0.2, colour = {0, 0, 0, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "SELECT CONSUMABLE TYPE", scale = 0.8, colour = {1, 1, 1, 1}}}}},
+             nodes = {{n = G.UIT.T, config = {text = "选择消耗牌类型", scale = 0.8, colour = {1, 1, 1, 1}}}}},
             
             -- Spacing
             {n = G.UIT.R, config = {align = "cm", padding = 0.15}, nodes = {}},
@@ -3408,17 +3435,17 @@ local function create_consumable_type_menu()
             -- Consumable types
             {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_give_tarot", hover = true, minw = 3, minh = 1, colour = {0.6, 0.2, 0.8, 1}, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Tarot", scale = 0.5, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "塔罗牌", scale = 0.5, colour = G.C.WHITE}}}}
             }},
             
             {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_give_planet", hover = true, minw = 3, minh = 1, colour = {0.2, 0.6, 0.8, 1}, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Planet", scale = 0.5, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "星球牌", scale = 0.5, colour = G.C.WHITE}}}}
             }},
             
             {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_give_spectral", hover = true, minw = 3, minh = 1, colour = {0.4, 0.8, 0.4, 1}, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Spectral", scale = 0.5, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "幻灵牌", scale = 0.5, colour = G.C.WHITE}}}}
             }},
 			
             -- Always show modded button if any modded consumables exist
@@ -3427,7 +3454,7 @@ local function create_consumable_type_menu()
              table_length(modded_planets_by_mod) > 0 or
              table_length(modded_spectrals_by_mod) > 0) and {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_give_modded_consumable", hover = true, minw = 3, minh = 1, colour = {0.8, 0.5, 0.2, 1}, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Modded", scale = 0.5, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "模组", scale = 0.5, colour = G.C.WHITE}}}}
             }} or nil,
             
             -- Spacing
@@ -3436,7 +3463,7 @@ local function create_consumable_type_menu()
             -- Back button
             {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_back_to_give", hover = true, minw = 3, minh = 1, colour = {0.6, 0.6, 0.6, 1}, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Back", scale = 0.5, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "返回", scale = 0.5, colour = G.C.WHITE}}}}
             }}
         }
     }
@@ -3452,11 +3479,11 @@ mod.config.give_card_edition = mod.config.give_card_edition or 'base'
 -- Give Card menu for selecting card properties
 local function create_give_card_menu()
     local suits = {'S', 'H', 'D', 'C'}
-    local suit_names = {'Spades', 'Hearts', 'Diamonds', 'Clubs'}
+    local suit_names = {'黑桃', '红桃', '方块', '梅花'}
     local ranks = {'A', '2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K'}
     
     -- Get current enhancement/seal/edition display names
-    local current_enhancement_name = "Base"
+    local current_enhancement_name = "普通"
     for _, enh in ipairs(enhancement_options) do
         if enh.key == mod.config.give_card_enhancement then
             current_enhancement_name = enh.name
@@ -3464,7 +3491,7 @@ local function create_give_card_menu()
         end
     end
     
-    local current_seal_name = "No Seal"
+    local current_seal_name = "无蜡封"
     for _, seal in ipairs(seal_options) do
         if seal.key == mod.config.give_card_seal then
             current_seal_name = seal.name
@@ -3472,7 +3499,7 @@ local function create_give_card_menu()
         end
     end
     
-    local current_edition_name = "Base"
+    local current_edition_name = "普通"
     for _, edition in ipairs(card_edition_options) do
         if edition.key == mod.config.give_card_edition then
             current_edition_name = edition.name
@@ -3481,7 +3508,7 @@ local function create_give_card_menu()
     end
     
     -- Get current suit name
-    local current_suit_name = "Spades"
+    local current_suit_name = "黑桃"
     for i, s in ipairs(suits) do
         if s == mod.config.give_card_suit then
             current_suit_name = suit_names[i]
@@ -3500,52 +3527,52 @@ local function create_give_card_menu()
         nodes = {
             -- Title
             {n = G.UIT.R, config = {align = "cm", padding = 0.2, colour = {0, 0, 0, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "GIVE CARD", scale = 0.8, colour = {1, 1, 1, 1}}}}},
+             nodes = {{n = G.UIT.T, config = {text = "赠送游戏牌", scale = 0.8, colour = {1, 1, 1, 1}}}}},
             
             -- Current selection display
             {n = G.UIT.R, config = {align = "cm", padding = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Current: " .. mod.config.give_card_rank .. " of " .. current_suit_name, scale = 0.5, colour = {1, 1, 1, 1}}}}},
+             nodes = {{n = G.UIT.T, config = {text = "当前：" .. current_suit_name .. " " .. mod.config.give_card_rank, scale = 0.5, colour = {1, 1, 1, 1}}}}},
             
             -- Rank selection
             {n = G.UIT.R, config = {align = "cm", padding = 0.15}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.05, button = "cs_cycle_give_rank", hover = true, minw = 4, minh = 1, colour = {0.6, 0.2, 0.8, 1}, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Rank: " .. mod.config.give_card_rank, scale = 0.5, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "点数：" .. mod.config.give_card_rank, scale = 0.5, colour = G.C.WHITE}}}}
             }},
             
             -- Suit selection
             {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.05, button = "cs_cycle_give_suit", hover = true, minw = 4, minh = 1, colour = {0.8, 0.2, 0.6, 1}, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Suit: " .. current_suit_name, scale = 0.5, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "花色：" .. current_suit_name, scale = 0.5, colour = G.C.WHITE}}}}
             }},
             
             -- Enhancement selection
             {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.05, button = "cs_cycle_give_enhancement", hover = true, minw = 4, minh = 1, colour = give_enhancement_color, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Enhancement: " .. current_enhancement_name, scale = 0.5, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "增强：" .. current_enhancement_name, scale = 0.5, colour = G.C.WHITE}}}}
             }},
             
             -- Seal selection
             {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.05, button = "cs_cycle_give_seal", hover = true, minw = 4, minh = 1, colour = give_seal_color, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Seal: " .. current_seal_name, scale = 0.5, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "蜡封：" .. current_seal_name, scale = 0.5, colour = G.C.WHITE}}}}
             }},
             
             -- Edition selection
             {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.05, button = "cs_cycle_give_edition", hover = true, minw = 4, minh = 1, colour = give_edition_color, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Edition: " .. current_edition_name, scale = 0.5, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "版本：" .. current_edition_name, scale = 0.5, colour = G.C.WHITE}}}}
             }},
             
             -- Give button
             {n = G.UIT.R, config = {align = "cm", padding = 0.2}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_give_configured_card", hover = true, minw = 4, minh = 1.2, colour = G.C.GREEN, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Give Card", scale = 0.6, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "赠送游戏牌", scale = 0.6, colour = G.C.WHITE}}}}
             }},
             
             -- Back button
             {n = G.UIT.R, config = {align = "cm", padding = 0.15}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_back_to_give", hover = true, minw = 3, minh = 1, colour = {0.6, 0.6, 0.6, 1}, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Back", scale = 0.5, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "返回", scale = 0.5, colour = G.C.WHITE}}}}
             }}
         }
     }
@@ -3727,7 +3754,7 @@ local function create_card_selection_menu(card_list, title, give_function_name)
 	
 	-- Add edition selection for joker menu (above tabs)
 if is_joker_menu then
-    local current_edition_name = "Base"
+    local current_edition_name = "普通"
     for _, edition in ipairs(joker_edition_options) do
         if edition.key == mod.config.give_joker_edition then
             current_edition_name = edition.name
@@ -3741,7 +3768,7 @@ if is_joker_menu then
     table.insert(card_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
         {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_cycle_give_joker_edition", hover = true, 
             minw = 4, minh = 0.8, colour = button_color, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Edition: " .. current_edition_name, scale = 0.5, colour = G.C.WHITE}}}}
+         nodes = {{n = G.UIT.T, config = {text = "版本：" .. current_edition_name, scale = 0.5, colour = G.C.WHITE}}}}
     }})
 end
     
@@ -3751,10 +3778,10 @@ end
         table.insert(card_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
             {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_give_" .. tab_type .. "_switch_to_vanilla", hover = true, minw = 2.5, minh = 0.8, 
                 colour = current_tab == "vanilla" and {0.6, 0.2, 0.8, 1} or {0.3, 0.3, 0.3, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Vanilla", scale = 0.5, colour = G.C.WHITE}}}},
+             nodes = {{n = G.UIT.T, config = {text = "原版", scale = 0.5, colour = G.C.WHITE}}}},
             {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_give_" .. tab_type .. "_switch_to_modded", hover = true, minw = 2.5, minh = 0.8, 
                 colour = current_tab == "modded" and {0.6, 0.2, 0.8, 1} or {0.3, 0.3, 0.3, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Modded", scale = 0.5, colour = G.C.WHITE}}}}
+             nodes = {{n = G.UIT.T, config = {text = "模组", scale = 0.5, colour = G.C.WHITE}}}}
         }})
         
                 -- Add mod-specific tabs if viewing modded items
@@ -3801,7 +3828,7 @@ end
                             ref_table = {mod_name = mod_name},
                             hover = true, minw = 1.8, minh = 0.6, 
                             colour = current_mod_tab == mod_name and {0.2, 0.8, 0.8, 1} or {0.3, 0.3, 0.3, 1}, r = 0.08}, 
-                        nodes = {{n = G.UIT.T, config = {text = string.sub(mod_name, 1, 12), scale = 0.3, colour = G.C.WHITE}}}
+                        nodes = {{n = G.UIT.T, config = {text = cs_text_sub(mod_name, 1, 12), scale = 0.3, colour = G.C.WHITE}}}
                     })
                 end
             end
@@ -3827,7 +3854,7 @@ end
 
 -- Info
 table.insert(card_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}, 
-     nodes = {{n = G.UIT.T, config = {text = "Page: " .. current_page .. "/" .. total_pages, scale = 0.5, colour = {1, 1, 1, 1}}}}}
+     nodes = {{n = G.UIT.T, config = {text = "页码：" .. current_page .. "/" .. total_pages, scale = 0.5, colour = {1, 1, 1, 1}}}}}
 )
     
     -- Card grid
@@ -3856,7 +3883,7 @@ table.insert(card_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1},
             
 -- Try to get the name from the game data first
 if center_or_tag and center_or_tag.name then
-    card_name = center_or_tag.name
+    card_name = card_key
 else
     card_name = card_key
 end
@@ -3894,12 +3921,12 @@ local max_chars = 15
 local display_name = card_name
 
 -- Truncate or scale
-if #display_name > max_chars then
+if cs_text_length(display_name) > max_chars then
     -- Try scaling first
-    text_scale = text_scale * (max_chars / #display_name)
+    text_scale = text_scale * (max_chars / cs_text_length(display_name))
     if text_scale < 0.18 then
         -- If too small, truncate instead
-        display_name = string.sub(display_name, 1, max_chars - 2) .. ".."
+        display_name = cs_text_sub(display_name, 1, max_chars - 2) .. ".."
         text_scale = 0.26
     end
 end
@@ -3934,15 +3961,15 @@ table.insert(card_grid.nodes[#card_grid.nodes].nodes, {
     if total_pages > 1 then
         table.insert(card_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.15}, nodes = {
             {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_give_prev_page", hover = true, minw = 2.5, minh = 1, colour = {0.8, 0.2, 0.2, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "◀ Previous", scale = 0.5, colour = G.C.WHITE}}}},
+             nodes = {{n = G.UIT.T, config = {text = "◀ 上一页", scale = 0.5, colour = G.C.WHITE}}}},
             {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_give_next_page", hover = true, minw = 2.5, minh = 1, colour = {0.2, 0.8, 0.2, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Next ▶", scale = 0.5, colour = G.C.WHITE}}}}
+             nodes = {{n = G.UIT.T, config = {text = "下一页 ▶", scale = 0.5, colour = G.C.WHITE}}}}
         }})
     end
     
     table.insert(card_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
         {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_back_to_consumable_type", hover = true, minw = 3, minh = 1, colour = {0.6, 0.6, 0.6, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Back", scale = 0.5, colour = G.C.WHITE}}}}
+             nodes = {{n = G.UIT.T, config = {text = "返回", scale = 0.5, colour = G.C.WHITE}}}}
     }})
     
     return {
@@ -4061,31 +4088,31 @@ G.FUNCS.cs_back_to_starting_items = function(e)
 end
 -- Text input click handlers
 G.FUNCS.cs_click_money = function(e)
-    create_overlay(create_text_input_dialog("Enter Starting Money", mod.config.starting_money, "money"))
+    create_overlay(create_text_input_dialog("输入初始金钱", mod.config.starting_money, "money"))
 end
 
 G.FUNCS.cs_click_hands = function(e)
-    create_overlay(create_text_input_dialog("Enter Starting Hands", mod.config.starting_hands, "hands"))
+    create_overlay(create_text_input_dialog("输入出牌次数", mod.config.starting_hands, "hands"))
 end
 
 G.FUNCS.cs_click_discards = function(e)
-    create_overlay(create_text_input_dialog("Enter Starting Discards", mod.config.starting_discards, "discards"))
+    create_overlay(create_text_input_dialog("输入弃牌次数", mod.config.starting_discards, "discards"))
 end
 
 G.FUNCS.cs_click_hand_size = function(e)
-    create_overlay(create_text_input_dialog("Enter Hand Size", mod.config.hand_size, "hand_size"))
+    create_overlay(create_text_input_dialog("输入手牌上限", mod.config.hand_size, "hand_size"))
 end
 
 G.FUNCS.cs_click_hand_levels = function(e)
-    create_overlay(create_text_input_dialog("Enter Hand Levels", mod.config.hand_levels, "hand_levels"))
+    create_overlay(create_text_input_dialog("输入牌型等级", mod.config.hand_levels, "hand_levels"))
 end
 
 G.FUNCS.cs_click_joker_slots = function(e)
-    create_overlay(create_text_input_dialog("Enter Joker Slots", mod.config.joker_slots, "joker_slots"))
+    create_overlay(create_text_input_dialog("输入小丑牌槽位", mod.config.joker_slots, "joker_slots"))
 end
 
 G.FUNCS.cs_click_consumable_slots = function(e)
-    create_overlay(create_text_input_dialog("Enter Consumable Slots", mod.config.consumable_slots, "consumable_slots"))
+    create_overlay(create_text_input_dialog("输入消耗牌槽位", mod.config.consumable_slots, "consumable_slots"))
 end
 
 -- Text input confirmation
@@ -4431,21 +4458,21 @@ G.FUNCS.cs_give_tarot = function(e)
     mod.config.current_give_list = tarot_cards
     mod.config.give_type = "tarot"
     mod.config.give_page = 1
-    create_overlay(create_card_selection_menu(tarot_cards, "SELECT TAROT CARD", "cs_instant_give_card"))
+    create_overlay(create_card_selection_menu(tarot_cards, "选择塔罗牌", "cs_instant_give_card"))
 end
 
 G.FUNCS.cs_give_planet = function(e)
     mod.config.current_give_list = planet_cards
     mod.config.give_type = "planet"
     mod.config.give_page = 1
-    create_overlay(create_card_selection_menu(planet_cards, "SELECT PLANET CARD", "cs_instant_give_card"))
+    create_overlay(create_card_selection_menu(planet_cards, "选择星球牌", "cs_instant_give_card"))
 end
 
 G.FUNCS.cs_give_spectral = function(e)
     mod.config.current_give_list = spectral_cards
     mod.config.give_type = "spectral"
     mod.config.give_page = 1
-    create_overlay(create_card_selection_menu(spectral_cards, "SELECT SPECTRAL CARD", "cs_instant_give_card"))
+    create_overlay(create_card_selection_menu(spectral_cards, "选择幻灵牌", "cs_instant_give_card"))
 end
 
 -- Modded consumable selection menu
@@ -4456,7 +4483,7 @@ local function create_modded_consumable_menu()
     local menu_nodes = {
         -- Title
         {n = G.UIT.R, config = {align = "cm", padding = 0.2, colour = {0, 0, 0, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "SELECT MODDED CONSUMABLE TYPE", scale = 0.8, colour = {1, 1, 1, 1}}}}},
+         nodes = {{n = G.UIT.T, config = {text = "选择模组消耗牌类型", scale = 0.8, colour = {1, 1, 1, 1}}}}},
         
         -- Spacing
         {n = G.UIT.R, config = {align = "cm", padding = 0.15}, nodes = {}},
@@ -4471,28 +4498,28 @@ local function create_modded_consumable_menu()
     if has_tarots then
         table.insert(menu_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
             {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_give_modded_tarot", hover = true, minw = 3, minh = 1, colour = {0.6, 0.2, 0.8, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Modded Tarots", scale = 0.5, colour = G.C.WHITE}}}}
+             nodes = {{n = G.UIT.T, config = {text = "模组塔罗牌", scale = 0.5, colour = G.C.WHITE}}}}
         }})
     end
     
     if has_planets then
         table.insert(menu_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
             {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_give_modded_planet", hover = true, minw = 3, minh = 1, colour = {0.2, 0.6, 0.8, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Modded Planets", scale = 0.5, colour = G.C.WHITE}}}}
+             nodes = {{n = G.UIT.T, config = {text = "模组星球牌", scale = 0.5, colour = G.C.WHITE}}}}
         }})
     end
     
     if has_spectrals then
         table.insert(menu_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
             {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_give_modded_spectral", hover = true, minw = 3, minh = 1, colour = {0.4, 0.8, 0.4, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Modded Spectrals", scale = 0.5, colour = G.C.WHITE}}}}
+             nodes = {{n = G.UIT.T, config = {text = "模组幻灵牌", scale = 0.5, colour = G.C.WHITE}}}}
         }})
     end
     
     if has_other then
         table.insert(menu_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
             {n = G.UIT.C, config = {align = "cm", padding = 0.08, button = "cs_give_modded_other", hover = true, minw = 3, minh = 1, colour = {0.8, 0.5, 0.2, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Other Modded", scale = 0.5, colour = G.C.WHITE}}}}
+             nodes = {{n = G.UIT.T, config = {text = "其他模组消耗牌", scale = 0.5, colour = G.C.WHITE}}}}
         }})
     end
     
@@ -4500,7 +4527,7 @@ local function create_modded_consumable_menu()
     table.insert(menu_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.15}, nodes = {}})
     table.insert(menu_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
         {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_back_to_consumable_type", hover = true, minw = 3, minh = 1, colour = {0.6, 0.6, 0.6, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Back", scale = 0.5, colour = G.C.WHITE}}}}
+         nodes = {{n = G.UIT.T, config = {text = "返回", scale = 0.5, colour = G.C.WHITE}}}}
     }})
     
     return {
@@ -4554,7 +4581,7 @@ local function create_modded_consumable_types_menu(mod_name)
     
     if not has_types then
         table.insert(menu_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
-            {n = G.UIT.T, config = {text = "No special consumables found", scale = 0.5, colour = {0.5, 0.5, 0.5, 1}}}
+            {n = G.UIT.T, config = {text = "未找到特殊消耗牌", scale = 0.5, colour = {0.5, 0.5, 0.5, 1}}}
         }})
     end
     
@@ -4562,7 +4589,7 @@ local function create_modded_consumable_types_menu(mod_name)
     table.insert(menu_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.15}, nodes = {}})
     table.insert(menu_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
         {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_back_to_consumable_type", hover = true, minw = 3, minh = 1, colour = {0.6, 0.6, 0.6, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Back", scale = 0.5, colour = G.C.WHITE}}}}
+         nodes = {{n = G.UIT.T, config = {text = "返回", scale = 0.5, colour = G.C.WHITE}}}}
     }})
     
     return {
@@ -4577,7 +4604,7 @@ local function create_modded_consumable_mod_list()
     local menu_nodes = {
         -- Title
         {n = G.UIT.R, config = {align = "cm", padding = 0.2, colour = {0, 0, 0, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "SELECT MOD", scale = 0.8, colour = {1, 1, 1, 1}}}}},
+         nodes = {{n = G.UIT.T, config = {text = "选择模组", scale = 0.8, colour = {1, 1, 1, 1}}}}},
         
         -- Spacing
         {n = G.UIT.R, config = {align = "cm", padding = 0.15}, nodes = {}},
@@ -4623,7 +4650,7 @@ local function create_modded_consumable_mod_list()
     table.insert(menu_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.15}, nodes = {}})
     table.insert(menu_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
         {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_back_to_consumable_type", hover = true, minw = 3, minh = 1, colour = {0.6, 0.6, 0.6, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Back", scale = 0.5, colour = G.C.WHITE}}}}
+         nodes = {{n = G.UIT.T, config = {text = "返回", scale = 0.5, colour = G.C.WHITE}}}}
     }})
     
     return {
@@ -4637,21 +4664,21 @@ G.FUNCS.cs_give_modded_tarot = function(e)
     mod.config.give_tarot_tab = "modded"
     mod.config.give_type = "tarot"
     mod.config.give_page = 1
-    create_overlay(create_card_selection_menu(modded_tarots_by_mod[mod.config.give_tarot_mod_tab] or {}, "SELECT MODDED TAROT", "cs_instant_give_card"))
+    create_overlay(create_card_selection_menu(modded_tarots_by_mod[mod.config.give_tarot_mod_tab] or {}, "选择模组塔罗牌", "cs_instant_give_card"))
 end
 
 G.FUNCS.cs_give_modded_planet = function(e)
     mod.config.give_planet_tab = "modded"
     mod.config.give_type = "planet"
     mod.config.give_page = 1
-    create_overlay(create_card_selection_menu(modded_planets_by_mod[mod.config.give_planet_mod_tab] or {}, "SELECT MODDED PLANET", "cs_instant_give_card"))
+    create_overlay(create_card_selection_menu(modded_planets_by_mod[mod.config.give_planet_mod_tab] or {}, "选择模组星球牌", "cs_instant_give_card"))
 end
 
 G.FUNCS.cs_give_modded_spectral = function(e)
     mod.config.give_spectral_tab = "modded"
     mod.config.give_type = "spectral"
     mod.config.give_page = 1
-    create_overlay(create_card_selection_menu(modded_spectrals_by_mod[mod.config.give_spectral_mod_tab] or {}, "SELECT MODDED SPECTRAL", "cs_instant_give_card"))
+    create_overlay(create_card_selection_menu(modded_spectrals_by_mod[mod.config.give_spectral_mod_tab] or {}, "选择模组幻灵牌", "cs_instant_give_card"))
 end
 
 -- Function to list mods with consumables
@@ -4659,7 +4686,7 @@ local function create_modded_consumable_mod_list()
     local menu_nodes = {
         -- Title
         {n = G.UIT.R, config = {align = "cm", padding = 0.2, colour = {0, 0, 0, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "SELECT MOD", scale = 0.8, colour = {1, 1, 1, 1}}}}},
+         nodes = {{n = G.UIT.T, config = {text = "选择模组", scale = 0.8, colour = {1, 1, 1, 1}}}}},
         
         -- Spacing
         {n = G.UIT.R, config = {align = "cm", padding = 0.15}, nodes = {}},
@@ -4705,7 +4732,7 @@ local function create_modded_consumable_mod_list()
     table.insert(menu_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.15}, nodes = {}})
     table.insert(menu_nodes, {n = G.UIT.R, config = {align = "cm", padding = 0.1}, nodes = {
         {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_back_to_consumable_type", hover = true, minw = 3, minh = 1, colour = {0.6, 0.6, 0.6, 1}, r = 0.1}, 
-         nodes = {{n = G.UIT.T, config = {text = "Back", scale = 0.5, colour = G.C.WHITE}}}}
+         nodes = {{n = G.UIT.T, config = {text = "返回", scale = 0.5, colour = G.C.WHITE}}}}
     }})
     
     return {
@@ -4736,7 +4763,7 @@ G.FUNCS.cs_select_modded_type = function(e)
     local type_key = e.config.ref_table.type_key
     local items = e.config.ref_table.items
     
-    local title = "SELECT " .. type_name:upper()
+    local title = "选择：" .. type_name:upper()
     
     -- Store these for back button navigation
     mod.config.give_type = "modded_consumable"
@@ -4768,7 +4795,7 @@ G.FUNCS.cs_give_voucher = function(e)
     mod.config.current_give_list = available_vouchers
     mod.config.give_type = "voucher"
     mod.config.give_page = 1
-    create_overlay(create_card_selection_menu(available_vouchers, "SELECT VOUCHER", "cs_instant_give_voucher"))
+    create_overlay(create_card_selection_menu(available_vouchers, "选择优惠券", "cs_instant_give_voucher"))
 end
 
 G.FUNCS.cs_give_joker = function(e)
@@ -4777,14 +4804,14 @@ G.FUNCS.cs_give_joker = function(e)
     mod.config.give_joker_tab = "vanilla"
     mod.config.give_type = "joker"
     mod.config.give_page = 1
-    create_overlay(create_card_selection_menu(available_jokers, "SELECT JOKER", "cs_instant_give_joker"))
+    create_overlay(create_card_selection_menu(available_jokers, "选择小丑牌", "cs_instant_give_joker"))
 end
 
 G.FUNCS.cs_give_tag = function(e)
     mod.config.current_give_list = available_tags
     mod.config.give_type = "tag"
     mod.config.give_page = 1
-    create_overlay(create_card_selection_menu(available_tags, "SELECT TAG", "cs_instant_give_tag"))
+    create_overlay(create_card_selection_menu(available_tags, "选择标签", "cs_instant_give_tag"))
 end
 
 G.FUNCS.cs_back_to_give = function(e)
@@ -5232,13 +5259,13 @@ end
 G.FUNCS.cs_give_switch_to_vanilla = function(e)
     mod.config.give_joker_tab = "vanilla"
     mod.config.give_page = 1
-    create_overlay(create_card_selection_menu(available_jokers, "SELECT JOKER", "cs_instant_give_joker"))
+    create_overlay(create_card_selection_menu(available_jokers, "选择小丑牌", "cs_instant_give_joker"))
 end
 
 G.FUNCS.cs_give_switch_to_modded = function(e)
     mod.config.give_joker_tab = "modded"
     mod.config.give_page = 1
-    create_overlay(create_card_selection_menu(all_modded_jokers, "SELECT JOKER", "cs_instant_give_joker"))
+    create_overlay(create_card_selection_menu(all_modded_jokers, "选择小丑牌", "cs_instant_give_joker"))
 end
 
 G.FUNCS.cs_give_switch_mod_tab = function(e)
@@ -5246,7 +5273,7 @@ G.FUNCS.cs_give_switch_mod_tab = function(e)
     if mod_name then
         mod.config.give_mod_tab = mod_name
         mod.config.give_page = 1
-        create_overlay(create_card_selection_menu(modded_jokers_by_mod[mod_name], "SELECT JOKER", "cs_instant_give_joker"))
+        create_overlay(create_card_selection_menu(modded_jokers_by_mod[mod_name], "选择小丑牌", "cs_instant_give_joker"))
     end
 end
 
@@ -5254,13 +5281,13 @@ end
 G.FUNCS.cs_give_joker_switch_to_vanilla = function(e)
     mod.config.give_joker_tab = "vanilla"
     mod.config.give_page = 1
-    create_overlay(create_card_selection_menu(available_jokers, "SELECT JOKER", "cs_instant_give_joker"))
+    create_overlay(create_card_selection_menu(available_jokers, "选择小丑牌", "cs_instant_give_joker"))
 end
 
 G.FUNCS.cs_give_joker_switch_to_modded = function(e)
     mod.config.give_joker_tab = "modded"
     mod.config.give_page = 1
-    create_overlay(create_card_selection_menu(modded_jokers_by_mod[mod.config.give_mod_tab] or {}, "SELECT JOKER", "cs_instant_give_joker"))
+    create_overlay(create_card_selection_menu(modded_jokers_by_mod[mod.config.give_mod_tab] or {}, "选择小丑牌", "cs_instant_give_joker"))
 end
 
 G.FUNCS.cs_give_joker_switch_mod_tab = function(e)
@@ -5268,7 +5295,7 @@ G.FUNCS.cs_give_joker_switch_mod_tab = function(e)
     if mod_name then
         mod.config.give_mod_tab = mod_name
         mod.config.give_page = 1
-        create_overlay(create_card_selection_menu(modded_jokers_by_mod[mod_name], "SELECT JOKER", "cs_instant_give_joker"))
+        create_overlay(create_card_selection_menu(modded_jokers_by_mod[mod_name], "选择小丑牌", "cs_instant_give_joker"))
     end
 end
 
@@ -5288,13 +5315,13 @@ end
 G.FUNCS.cs_give_tarot_switch_to_vanilla = function(e)
     mod.config.give_tarot_tab = "vanilla"
     mod.config.give_page = 1
-    create_overlay(create_card_selection_menu(tarot_cards, "SELECT TAROT CARD", "cs_instant_give_card"))
+    create_overlay(create_card_selection_menu(tarot_cards, "选择塔罗牌", "cs_instant_give_card"))
 end
 
 G.FUNCS.cs_give_tarot_switch_to_modded = function(e)
     mod.config.give_tarot_tab = "modded"
     mod.config.give_page = 1
-    create_overlay(create_card_selection_menu(modded_tarots_by_mod[mod.config.give_tarot_mod_tab] or {}, "SELECT TAROT CARD", "cs_instant_give_card"))
+    create_overlay(create_card_selection_menu(modded_tarots_by_mod[mod.config.give_tarot_mod_tab] or {}, "选择塔罗牌", "cs_instant_give_card"))
 end
 
 G.FUNCS.cs_give_tarot_switch_mod_tab = function(e)
@@ -5302,7 +5329,7 @@ G.FUNCS.cs_give_tarot_switch_mod_tab = function(e)
     if mod_name then
         mod.config.give_tarot_mod_tab = mod_name
         mod.config.give_page = 1
-        create_overlay(create_card_selection_menu(modded_tarots_by_mod[mod_name], "SELECT TAROT CARD", "cs_instant_give_card"))
+        create_overlay(create_card_selection_menu(modded_tarots_by_mod[mod_name], "选择塔罗牌", "cs_instant_give_card"))
     end
 end
 
@@ -5310,13 +5337,13 @@ end
 G.FUNCS.cs_give_planet_switch_to_vanilla = function(e)
     mod.config.give_planet_tab = "vanilla"
     mod.config.give_page = 1
-    create_overlay(create_card_selection_menu(planet_cards, "SELECT PLANET CARD", "cs_instant_give_card"))
+    create_overlay(create_card_selection_menu(planet_cards, "选择星球牌", "cs_instant_give_card"))
 end
 
 G.FUNCS.cs_give_planet_switch_to_modded = function(e)
     mod.config.give_planet_tab = "modded"
     mod.config.give_page = 1
-    create_overlay(create_card_selection_menu(modded_planets_by_mod[mod.config.give_planet_mod_tab] or {}, "SELECT PLANET CARD", "cs_instant_give_card"))
+    create_overlay(create_card_selection_menu(modded_planets_by_mod[mod.config.give_planet_mod_tab] or {}, "选择星球牌", "cs_instant_give_card"))
 end
 
 G.FUNCS.cs_give_planet_switch_mod_tab = function(e)
@@ -5324,7 +5351,7 @@ G.FUNCS.cs_give_planet_switch_mod_tab = function(e)
     if mod_name then
         mod.config.give_planet_mod_tab = mod_name
         mod.config.give_page = 1
-        create_overlay(create_card_selection_menu(modded_planets_by_mod[mod_name], "SELECT PLANET CARD", "cs_instant_give_card"))
+        create_overlay(create_card_selection_menu(modded_planets_by_mod[mod_name], "选择星球牌", "cs_instant_give_card"))
     end
 end
 
@@ -5332,13 +5359,13 @@ end
 G.FUNCS.cs_give_spectral_switch_to_vanilla = function(e)
     mod.config.give_spectral_tab = "vanilla"
     mod.config.give_page = 1
-    create_overlay(create_card_selection_menu(spectral_cards, "SELECT SPECTRAL CARD", "cs_instant_give_card"))
+    create_overlay(create_card_selection_menu(spectral_cards, "选择幻灵牌", "cs_instant_give_card"))
 end
 
 G.FUNCS.cs_give_spectral_switch_to_modded = function(e)
     mod.config.give_spectral_tab = "modded"
     mod.config.give_page = 1
-    create_overlay(create_card_selection_menu(modded_spectrals_by_mod[mod.config.give_spectral_mod_tab] or {}, "SELECT SPECTRAL CARD", "cs_instant_give_card"))
+    create_overlay(create_card_selection_menu(modded_spectrals_by_mod[mod.config.give_spectral_mod_tab] or {}, "选择幻灵牌", "cs_instant_give_card"))
 end
 
 G.FUNCS.cs_give_spectral_switch_mod_tab = function(e)
@@ -5346,7 +5373,7 @@ G.FUNCS.cs_give_spectral_switch_mod_tab = function(e)
     if mod_name then
         mod.config.give_spectral_mod_tab = mod_name
         mod.config.give_page = 1
-        create_overlay(create_card_selection_menu(modded_spectrals_by_mod[mod_name], "SELECT SPECTRAL CARD", "cs_instant_give_card"))
+        create_overlay(create_card_selection_menu(modded_spectrals_by_mod[mod_name], "选择幻灵牌", "cs_instant_give_card"))
     end
 end
 
@@ -5354,13 +5381,13 @@ end
 G.FUNCS.cs_give_voucher_switch_to_vanilla = function(e)
     mod.config.give_voucher_tab = "vanilla"
     mod.config.give_page = 1
-    create_overlay(create_card_selection_menu(available_vouchers, "SELECT VOUCHER", "cs_instant_give_voucher"))
+    create_overlay(create_card_selection_menu(available_vouchers, "选择优惠券", "cs_instant_give_voucher"))
 end
 
 G.FUNCS.cs_give_voucher_switch_to_modded = function(e)
     mod.config.give_voucher_tab = "modded"
     mod.config.give_page = 1
-    create_overlay(create_card_selection_menu(modded_vouchers_by_mod[mod.config.give_voucher_mod_tab] or {}, "SELECT VOUCHER", "cs_instant_give_voucher"))
+    create_overlay(create_card_selection_menu(modded_vouchers_by_mod[mod.config.give_voucher_mod_tab] or {}, "选择优惠券", "cs_instant_give_voucher"))
 end
 
 G.FUNCS.cs_give_voucher_switch_mod_tab = function(e)
@@ -5368,7 +5395,7 @@ G.FUNCS.cs_give_voucher_switch_mod_tab = function(e)
     if mod_name then
         mod.config.give_voucher_mod_tab = mod_name
         mod.config.give_page = 1
-        create_overlay(create_card_selection_menu(modded_vouchers_by_mod[mod_name], "SELECT VOUCHER", "cs_instant_give_voucher"))
+        create_overlay(create_card_selection_menu(modded_vouchers_by_mod[mod_name], "选择优惠券", "cs_instant_give_voucher"))
     end
 end
 
@@ -5376,13 +5403,13 @@ end
 G.FUNCS.cs_give_tag_switch_to_vanilla = function(e)
     mod.config.give_tag_tab = "vanilla"
     mod.config.give_page = 1
-    create_overlay(create_card_selection_menu(available_tags, "SELECT TAG", "cs_instant_give_tag"))
+    create_overlay(create_card_selection_menu(available_tags, "选择标签", "cs_instant_give_tag"))
 end
 
 G.FUNCS.cs_give_tag_switch_to_modded = function(e)
     mod.config.give_tag_tab = "modded"
     mod.config.give_page = 1
-    create_overlay(create_card_selection_menu(modded_tags_by_mod[mod.config.give_tag_mod_tab] or {}, "SELECT TAG", "cs_instant_give_tag"))
+    create_overlay(create_card_selection_menu(modded_tags_by_mod[mod.config.give_tag_mod_tab] or {}, "选择标签", "cs_instant_give_tag"))
 end
 
 G.FUNCS.cs_give_tag_switch_mod_tab = function(e)
@@ -5390,7 +5417,7 @@ G.FUNCS.cs_give_tag_switch_mod_tab = function(e)
     if mod_name then
         mod.config.give_tag_mod_tab = mod_name
         mod.config.give_page = 1
-        create_overlay(create_card_selection_menu(modded_tags_by_mod[mod_name], "SELECT TAG", "cs_instant_give_tag"))
+        create_overlay(create_card_selection_menu(modded_tags_by_mod[mod_name], "选择标签", "cs_instant_give_tag"))
     end
 end
 
@@ -5404,41 +5431,41 @@ G.FUNCS.cs_give_prev_page = function(e)
         if mod.config.give_joker_tab == "modded" then
             current_list = modded_jokers_by_mod[mod.config.give_mod_tab] or {}
         end
-        create_overlay(create_card_selection_menu(current_list, "SELECT JOKER", "cs_instant_give_joker"))
+        create_overlay(create_card_selection_menu(current_list, "选择小丑牌", "cs_instant_give_joker"))
     elseif mod.config.give_type == "tarot" then
         local current_list = tarot_cards
         if mod.config.give_tarot_tab == "modded" then
             current_list = modded_tarots_by_mod[mod.config.give_tarot_mod_tab] or {}
         end
-        create_overlay(create_card_selection_menu(current_list, "SELECT TAROT CARD", "cs_instant_give_card"))
+        create_overlay(create_card_selection_menu(current_list, "选择塔罗牌", "cs_instant_give_card"))
     elseif mod.config.give_type == "planet" then
         local current_list = planet_cards
         if mod.config.give_planet_tab == "modded" then
             current_list = modded_planets_by_mod[mod.config.give_planet_mod_tab] or {}
         end
-        create_overlay(create_card_selection_menu(current_list, "SELECT PLANET CARD", "cs_instant_give_card"))
+        create_overlay(create_card_selection_menu(current_list, "选择星球牌", "cs_instant_give_card"))
     elseif mod.config.give_type == "spectral" then
         local current_list = spectral_cards
         if mod.config.give_spectral_tab == "modded" then
             current_list = modded_spectrals_by_mod[mod.config.give_spectral_mod_tab] or {}
         end
-        create_overlay(create_card_selection_menu(current_list, "SELECT SPECTRAL CARD", "cs_instant_give_card"))
+        create_overlay(create_card_selection_menu(current_list, "选择幻灵牌", "cs_instant_give_card"))
     elseif mod.config.give_type == "voucher" then
         local current_list = available_vouchers
         if mod.config.give_voucher_tab == "modded" then
             current_list = modded_vouchers_by_mod[mod.config.give_voucher_mod_tab] or {}
         end
-        create_overlay(create_card_selection_menu(current_list, "SELECT VOUCHER", "cs_instant_give_voucher"))
+        create_overlay(create_card_selection_menu(current_list, "选择优惠券", "cs_instant_give_voucher"))
     elseif mod.config.give_type == "tag" then
         local current_list = available_tags
         if mod.config.give_tag_tab == "modded" then
             current_list = modded_tags_by_mod[mod.config.give_tag_mod_tab] or {}
         end
-        create_overlay(create_card_selection_menu(current_list, "SELECT TAG", "cs_instant_give_tag"))
+        create_overlay(create_card_selection_menu(current_list, "选择标签", "cs_instant_give_tag"))
 	elseif mod.config.give_type == "modded_consumable" then
         -- Use the stored list
         local current_list = mod.config.current_modded_list or {}
-        create_overlay(create_card_selection_menu(current_list, "SELECT " .. (mod.config.current_type_name or "ITEM"), "cs_instant_give_card"))
+        create_overlay(create_card_selection_menu(current_list, "选择：" .. (mod.config.current_type_name or "物品"), "cs_instant_give_card"))
     end
 end
 
@@ -5451,7 +5478,7 @@ G.FUNCS.cs_give_prev_mod_page_joker = function(e)
     local total_pages = math.ceil(#mod_list / 5)
     
     mod.config.give_mod_page_joker = math.max(1, (mod.config.give_mod_page_joker or 1) - 1)
-    create_overlay(create_card_selection_menu(modded_jokers_by_mod[mod.config.give_mod_tab] or {}, "SELECT JOKER", "cs_instant_give_joker"))
+    create_overlay(create_card_selection_menu(modded_jokers_by_mod[mod.config.give_mod_tab] or {}, "选择小丑牌", "cs_instant_give_joker"))
 end
 
 G.FUNCS.cs_give_next_mod_page_joker = function(e)
@@ -5462,7 +5489,7 @@ G.FUNCS.cs_give_next_mod_page_joker = function(e)
     local total_pages = math.ceil(#mod_list / 5)
     
     mod.config.give_mod_page_joker = math.min(total_pages, (mod.config.give_mod_page_joker or 1) + 1)
-    create_overlay(create_card_selection_menu(modded_jokers_by_mod[mod.config.give_mod_tab] or {}, "SELECT JOKER", "cs_instant_give_joker"))
+    create_overlay(create_card_selection_menu(modded_jokers_by_mod[mod.config.give_mod_tab] or {}, "选择小丑牌", "cs_instant_give_joker"))
 end
 
 -- Give menu mod navigation for vouchers
@@ -5474,7 +5501,7 @@ G.FUNCS.cs_give_prev_mod_page_voucher = function(e)
     local total_pages = math.ceil(#mod_list / 5)
     
     mod.config.give_mod_page_voucher = math.max(1, (mod.config.give_mod_page_voucher or 1) - 1)
-    create_overlay(create_card_selection_menu(modded_vouchers_by_mod[mod.config.give_voucher_mod_tab] or {}, "SELECT VOUCHER", "cs_instant_give_voucher"))
+    create_overlay(create_card_selection_menu(modded_vouchers_by_mod[mod.config.give_voucher_mod_tab] or {}, "选择优惠券", "cs_instant_give_voucher"))
 end
 
 G.FUNCS.cs_give_next_mod_page_voucher = function(e)
@@ -5485,7 +5512,7 @@ G.FUNCS.cs_give_next_mod_page_voucher = function(e)
     local total_pages = math.ceil(#mod_list / 5)
     
     mod.config.give_mod_page_voucher = math.min(total_pages, (mod.config.give_mod_page_voucher or 1) + 1)
-    create_overlay(create_card_selection_menu(modded_vouchers_by_mod[mod.config.give_voucher_mod_tab] or {}, "SELECT VOUCHER", "cs_instant_give_voucher"))
+    create_overlay(create_card_selection_menu(modded_vouchers_by_mod[mod.config.give_voucher_mod_tab] or {}, "选择优惠券", "cs_instant_give_voucher"))
 end
 
 -- Give menu mod navigation for tags
@@ -5497,7 +5524,7 @@ G.FUNCS.cs_give_prev_mod_page_tag = function(e)
     local total_pages = math.ceil(#mod_list / 5)
     
     mod.config.give_mod_page_tag = math.max(1, (mod.config.give_mod_page_tag or 1) - 1)
-    create_overlay(create_card_selection_menu(modded_tags_by_mod[mod.config.give_tag_mod_tab] or {}, "SELECT TAG", "cs_instant_give_tag"))
+    create_overlay(create_card_selection_menu(modded_tags_by_mod[mod.config.give_tag_mod_tab] or {}, "选择标签", "cs_instant_give_tag"))
 end
 
 G.FUNCS.cs_give_next_mod_page_tag = function(e)
@@ -5508,7 +5535,7 @@ G.FUNCS.cs_give_next_mod_page_tag = function(e)
     local total_pages = math.ceil(#mod_list / 5)
     
     mod.config.give_mod_page_tag = math.min(total_pages, (mod.config.give_mod_page_tag or 1) + 1)
-    create_overlay(create_card_selection_menu(modded_tags_by_mod[mod.config.give_tag_mod_tab] or {}, "SELECT TAG", "cs_instant_give_tag"))
+    create_overlay(create_card_selection_menu(modded_tags_by_mod[mod.config.give_tag_mod_tab] or {}, "选择标签", "cs_instant_give_tag"))
 end
 
 -- Give menu mod navigation for tarots
@@ -5520,7 +5547,7 @@ G.FUNCS.cs_give_prev_mod_page_tarot = function(e)
     local total_pages = math.ceil(#mod_list / 5)
     
     mod.config.give_mod_page_tarot = math.max(1, (mod.config.give_mod_page_tarot or 1) - 1)
-    create_overlay(create_card_selection_menu(modded_tarots_by_mod[mod.config.give_tarot_mod_tab] or {}, "SELECT TAROT CARD", "cs_instant_give_card"))
+    create_overlay(create_card_selection_menu(modded_tarots_by_mod[mod.config.give_tarot_mod_tab] or {}, "选择塔罗牌", "cs_instant_give_card"))
 end
 
 G.FUNCS.cs_give_next_mod_page_tarot = function(e)
@@ -5531,7 +5558,7 @@ G.FUNCS.cs_give_next_mod_page_tarot = function(e)
     local total_pages = math.ceil(#mod_list / 5)
     
     mod.config.give_mod_page_tarot = math.min(total_pages, (mod.config.give_mod_page_tarot or 1) + 1)
-    create_overlay(create_card_selection_menu(modded_tarots_by_mod[mod.config.give_tarot_mod_tab] or {}, "SELECT TAROT CARD", "cs_instant_give_card"))
+    create_overlay(create_card_selection_menu(modded_tarots_by_mod[mod.config.give_tarot_mod_tab] or {}, "选择塔罗牌", "cs_instant_give_card"))
 end
 
 -- Give menu mod navigation for planets
@@ -5543,7 +5570,7 @@ G.FUNCS.cs_give_prev_mod_page_planet = function(e)
     local total_pages = math.ceil(#mod_list / 5)
     
     mod.config.give_mod_page_planet = math.max(1, (mod.config.give_mod_page_planet or 1) - 1)
-    create_overlay(create_card_selection_menu(modded_planets_by_mod[mod.config.give_planet_mod_tab] or {}, "SELECT PLANET CARD", "cs_instant_give_card"))
+    create_overlay(create_card_selection_menu(modded_planets_by_mod[mod.config.give_planet_mod_tab] or {}, "选择星球牌", "cs_instant_give_card"))
 end
 
 G.FUNCS.cs_give_next_mod_page_planet = function(e)
@@ -5554,7 +5581,7 @@ G.FUNCS.cs_give_next_mod_page_planet = function(e)
     local total_pages = math.ceil(#mod_list / 5)
     
     mod.config.give_mod_page_planet = math.min(total_pages, (mod.config.give_mod_page_planet or 1) + 1)
-    create_overlay(create_card_selection_menu(modded_planets_by_mod[mod.config.give_planet_mod_tab] or {}, "SELECT PLANET CARD", "cs_instant_give_card"))
+    create_overlay(create_card_selection_menu(modded_planets_by_mod[mod.config.give_planet_mod_tab] or {}, "选择星球牌", "cs_instant_give_card"))
 end
 
 -- Give menu mod navigation for spectrals
@@ -5566,7 +5593,7 @@ G.FUNCS.cs_give_prev_mod_page_spectral = function(e)
     local total_pages = math.ceil(#mod_list / 5)
     
     mod.config.give_mod_page_spectral = math.max(1, (mod.config.give_mod_page_spectral or 1) - 1)
-    create_overlay(create_card_selection_menu(modded_spectrals_by_mod[mod.config.give_spectral_mod_tab] or {}, "SELECT SPECTRAL CARD", "cs_instant_give_card"))
+    create_overlay(create_card_selection_menu(modded_spectrals_by_mod[mod.config.give_spectral_mod_tab] or {}, "选择幻灵牌", "cs_instant_give_card"))
 end
 
 G.FUNCS.cs_give_next_mod_page_spectral = function(e)
@@ -5577,7 +5604,7 @@ G.FUNCS.cs_give_next_mod_page_spectral = function(e)
     local total_pages = math.ceil(#mod_list / 5)
     
     mod.config.give_mod_page_spectral = math.min(total_pages, (mod.config.give_mod_page_spectral or 1) + 1)
-    create_overlay(create_card_selection_menu(modded_spectrals_by_mod[mod.config.give_spectral_mod_tab] or {}, "SELECT SPECTRAL CARD", "cs_instant_give_card"))
+    create_overlay(create_card_selection_menu(modded_spectrals_by_mod[mod.config.give_spectral_mod_tab] or {}, "选择幻灵牌", "cs_instant_give_card"))
 end
 
 G.FUNCS.cs_give_next_page = function(e)
@@ -5634,19 +5661,19 @@ G.FUNCS.cs_give_next_page = function(e)
     
     -- Recreate the appropriate menu
     if mod.config.give_type == "joker" then
-        create_overlay(create_card_selection_menu(current_list, "SELECT JOKER", "cs_instant_give_joker"))
+        create_overlay(create_card_selection_menu(current_list, "选择小丑牌", "cs_instant_give_joker"))
     elseif mod.config.give_type == "tarot" then
-        create_overlay(create_card_selection_menu(current_list, "SELECT TAROT CARD", "cs_instant_give_card"))
+        create_overlay(create_card_selection_menu(current_list, "选择塔罗牌", "cs_instant_give_card"))
     elseif mod.config.give_type == "planet" then
-        create_overlay(create_card_selection_menu(current_list, "SELECT PLANET CARD", "cs_instant_give_card"))
+        create_overlay(create_card_selection_menu(current_list, "选择星球牌", "cs_instant_give_card"))
     elseif mod.config.give_type == "spectral" then
-        create_overlay(create_card_selection_menu(current_list, "SELECT SPECTRAL CARD", "cs_instant_give_card"))
+        create_overlay(create_card_selection_menu(current_list, "选择幻灵牌", "cs_instant_give_card"))
     elseif mod.config.give_type == "voucher" then
-        create_overlay(create_card_selection_menu(current_list, "SELECT VOUCHER", "cs_instant_give_voucher"))
+        create_overlay(create_card_selection_menu(current_list, "选择优惠券", "cs_instant_give_voucher"))
     elseif mod.config.give_type == "tag" then
-        create_overlay(create_card_selection_menu(current_list, "SELECT TAG", "cs_instant_give_tag"))
+        create_overlay(create_card_selection_menu(current_list, "选择标签", "cs_instant_give_tag"))
     elseif mod.config.give_type == "modded_consumable" then
-        create_overlay(create_card_selection_menu(current_list, "SELECT " .. (mod.config.current_type_name or "ITEM"), "cs_instant_give_card"))
+        create_overlay(create_card_selection_menu(current_list, "选择：" .. (mod.config.current_type_name or "物品"), "cs_instant_give_card"))
 	end
 end
 
@@ -6024,7 +6051,7 @@ G.FUNCS.cs_cycle_give_joker_edition = function(e)
     -- Recreate the appropriate give menu
     create_overlay(create_card_selection_menu(
         mod.config.give_joker_tab == "vanilla" and available_jokers or modded_jokers_by_mod[mod.config.give_mod_tab] or {},
-        "SELECT JOKER", 
+        "选择小丑牌", 
         "cs_instant_give_joker"
     ))
 end
@@ -6037,17 +6064,17 @@ G.FUNCS.cs_change_menu_key = function(e)
         config = {align = "cm", minw = 6, minh = 4, colour = {0, 0, 0, 0.9}, r = 0.1, padding = 0.1},
         nodes = {
             {n = G.UIT.R, config = {align = "cm", padding = 0.2, colour = {0, 0, 0, 1}, r = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "PRESS NEW KEY", scale = 0.6, colour = {1, 1, 1, 1}}}}},
+             nodes = {{n = G.UIT.T, config = {text = "设置新快捷键", scale = 0.6, colour = {1, 1, 1, 1}}}}},
             
             {n = G.UIT.R, config = {align = "cm", padding = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Press any key to set as menu key", scale = 0.4, colour = {0.7, 0.7, 0.7, 1}}}}},
+             nodes = {{n = G.UIT.T, config = {text = "按下要用作菜单快捷键的按键", scale = 0.4, colour = {0.7, 0.7, 0.7, 1}}}}},
             
             {n = G.UIT.R, config = {align = "cm", padding = 0.1}, 
-             nodes = {{n = G.UIT.T, config = {text = "Current: " .. string.upper(mod.config.menu_key), scale = 0.4, colour = {1, 1, 0, 1}}}}},
+             nodes = {{n = G.UIT.T, config = {text = "当前：" .. string.upper(mod.config.menu_key), scale = 0.4, colour = {1, 1, 0, 1}}}}},
             
             {n = G.UIT.R, config = {align = "cm", padding = 0.2}, nodes = {
                 {n = G.UIT.C, config = {align = "cm", padding = 0.1, button = "cs_cancel_key_change", hover = true, minw = 2, minh = 0.8, colour = G.C.RED, r = 0.1}, 
-                 nodes = {{n = G.UIT.T, config = {text = "Cancel", scale = 0.5, colour = G.C.WHITE}}}}
+                 nodes = {{n = G.UIT.T, config = {text = "取消", scale = 0.5, colour = G.C.WHITE}}}}
             }}
         }
     }
@@ -6223,7 +6250,7 @@ G.FUNCS.set_pause_menu = function(e)
                                     r = 0.1
                                 },
                                 nodes = {
-                                    {n = G.UIT.T, config = {text = "Zoker's Menu", scale = 0.5, colour = G.C.WHITE}}
+                                    {n = G.UIT.T, config = {text = "作弊菜单", scale = 0.5, colour = G.C.WHITE}}
                                 }
                             }
                         }
